@@ -1,0 +1,8 @@
+services:
+  gifstudio:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/workdir:/app/backend/workdir
+    restart: unless-stopped

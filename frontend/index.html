@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GIF Studio (local)</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>GIFMe</h1>
+  <div id="health"></div>
+</header>
+
+<nav id="tabs">
+  <button data-tab="make" class="active">GIF Maker</button>
+  <button data-tab="convert">Convert</button>
+  <button data-tab="resize">Resize</button>
+  <button data-tab="crop">Crop</button>
+  <button data-tab="rotate">Rotate / Flip</button>
+  <button data-tab="speed">Speed</button>
+  <button data-tab="reverse">Reverse</button>
+  <button data-tab="effects">Effects</button>
+  <button data-tab="text">Add Text</button>
+  <button data-tab="optimize">Optimize</button>
+  <button data-tab="split">Split Frames</button>
+  <button data-tab="analyze">Analyzer</button>
+</nav>
+
+<main>
+
+  <section class="panel active" id="panel-make">
+    <h2>GIF Maker</h2>
+    <p class="hint">Video → GIF, or a batch of still images → GIF.</p>
+    <div class="row">
+      <div class="card">
+        <h3>From video</h3>
+        <input type="file" id="make-video-file" accept="video/*">
+        <label>FPS <input type="number" id="make-fps" value="15" min="1" max="50"></label>
+        <label>Width (px, blank = original) <input type="number" id="make-width" value="480"></label>
+        <label>Start (s) <input type="number" id="make-start" value="0" step="0.1"></label>
+        <label>Duration (s, 0 = full) <input type="number" id="make-duration" value="0" step="0.1"></label>
+        <button onclick="Actions.videoToGif()">Create GIF</button>
+      </div>
+      <div class="card">
+        <h3>From images</h3>
+        <input type="file" id="make-images-files" accept="image/*" multiple>
+        <label>Delay per frame (ms) <input type="number" id="make-delay" value="100"></label>
+        <label>Width (px, blank = original) <input type="number" id="make-images-width"></label>
+        <button onclick="Actions.imagesToGif()">Create GIF</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-convert">
+    <h2>Convert</h2>
+    <input type="file" id="convert-file" accept="image/gif">
+    <label>Target format
+      <select id="convert-target">
+        <option value="mp4">MP4</option>
+        <option value="webm">WebM</option>
+        <option value="webp">Animated WebP</option>
+        <option value="apng">APNG</option>
+      </select>
+    </label>
+    <button onclick="Actions.convert()">Convert</button>
+  </section>
+
+  <section class="panel" id="panel-resize">
+    <h2>Resize</h2>
+    <input type="file" id="resize-file" accept="image/gif,video/*">
+    <label>Width (blank = auto) <input type="number" id="resize-width"></label>
+    <label>Height (blank = auto) <input type="number" id="resize-height"></label>
+    <p class="hint">Leave one blank to preserve aspect ratio.</p>
+    <button onclick="Actions.resize()">Resize</button>
+  </section>
+
+  <section class="panel" id="panel-crop">
+    <h2>Crop</h2>
+    <input type="file" id="crop-file" accept="image/gif,video/*">
+    <div class="row">
+      <label>X <input type="number" id="crop-x" value="0"></label>
+      <label>Y <input type="number" id="crop-y" value="0"></label>
+      <label>Width <input type="number" id="crop-w" value="200"></label>
+      <label>Height <input type="number" id="crop-h" value="200"></label>
+    </div>
+    <button onclick="Actions.crop()">Crop</button>
+  </section>
+
+  <section class="panel" id="panel-rotate">
+    <h2>Rotate / Flip</h2>
+    <input type="file" id="rotate-file" accept="image/gif,video/*">
+    <div class="row">
+      <button onclick="Actions.rotate(90)">Rotate 90°</button>
+      <button onclick="Actions.rotate(180)">Rotate 180°</button>
+      <button onclick="Actions.rotate(270)">Rotate 270°</button>
+      <button onclick="Actions.flip('horizontal')">Flip horizontal</button>
+      <button onclick="Actions.flip('vertical')">Flip vertical</button>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-speed">
+    <h2>Speed</h2>
+    <input type="file" id="speed-file" accept="image/gif,video/*">
+    <label>Speed factor (2 = twice as fast, 0.5 = half speed)
+      <input type="number" id="speed-factor" value="1" step="0.1">
+    </label>
+    <button onclick="Actions.speed()">Apply</button>
+  </section>
+
+  <section class="panel" id="panel-reverse">
+    <h2>Reverse</h2>
+    <input type="file" id="reverse-file" accept="image/gif,video/*">
+    <button onclick="Actions.reverse()">Reverse</button>
+  </section>
+
+  <section class="panel" id="panel-effects">
+    <h2>Effects</h2>
+    <input type="file" id="effects-file" accept="image/gif,video/*">
+    <label>Effect
+      <select id="effects-name">
+        <option value="grayscale">Grayscale</option>
+        <option value="sepia">Sepia</option>
+        <option value="invert">Invert</option>
+        <option value="blur">Blur</option>
+        <option value="sharpen">Sharpen</option>
+        <option value="pixelate">Pixelate</option>
+      </select>
+    </label>
+    <button onclick="Actions.effect()">Apply</button>
+  </section>
+
+  <section class="panel" id="panel-text">
+    <h2>Add Text</h2>
+    <input type="file" id="text-file" accept="image/gif,video/*">
+    <label>Text <input type="text" id="text-content" value="Hello!"></label>
+    <label>Position
+      <select id="text-position">
+        <option value="bottom">Bottom</option>
+        <option value="top">Top</option>
+        <option value="center">Center</option>
+      </select>
+    </label>
+    <label>Font size <input type="number" id="text-size" value="28"></label>
+    <label>Color <input type="text" id="text-color" value="white"></label>
+    <button onclick="Actions.text()">Add text</button>
+  </section>
+
+  <section class="panel" id="panel-optimize">
+    <h2>Optimize</h2>
+    <p class="hint">Uses gifsicle.</p>
+    <input type="file" id="optimize-file" accept="image/gif">
+    <label>Lossy level (0–200, higher = smaller/worse) <input type="number" id="optimize-lossy" value="30"></label>
+    <label>Max colors (blank = keep) <input type="number" id="optimize-colors"></label>
+    <button onclick="Actions.optimize()">Optimize</button>
+  </section>
+
+  <section class="panel" id="panel-split">
+    <h2>Split Frames</h2>
+    <input type="file" id="split-file" accept="image/gif,video/*">
+    <button onclick="Actions.split()">Split into PNG frames (.zip)</button>
+  </section>
+
+  <section class="panel" id="panel-analyze">
+    <h2>Analyzer</h2>
+    <input type="file" id="analyze-file" accept="image/gif,video/*">
+    <button onclick="Actions.analyze()">Analyze</button>
+    <pre id="analyze-output"></pre>
+  </section>
+
+</main>
+
+<div id="result">
+  <h3>Result</h3>
+  <div id="result-body"><p class="hint">Output will appear here.</p></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
