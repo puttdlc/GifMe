@@ -20,15 +20,11 @@ A local, self-hosted GIF/animation toolkit inspired by functions of ezgif.com. R
 
 ## What's *not* included (ezgif has these, this doesn't yet)
 
-AVIF and JXL support (needs `libavif`/`libjxl`, less commonly pre-installed -
-straightforward to add the same way as the others, see `backend/tools.py`),
-animated SVG import (SVG with SMIL/CSS animation really needs a headless
-browser to render correctly, which is a much bigger dependency), a crop/resize
-**visual** selector (currently you type in pixel coordinates rather than
-drag a box on the image - addable with a canvas overlay in `app.js`), batch
-processing multiple files in one go, and a job queue for large files (right
-now a request blocks until ffmpeg finishes, fine for typical GIF-sized clips
-but not for say a 500MB source video).
+- ❌ VIF and JXL support (needs `libavif`/`libjxl`, less commonly pre-installed -
+straightforward to add the same way as the others, see `backend/tools.py`)
+- ❌ Animated SVG import (SVG with SMIL/CSS animation really needs a headless browser to render correctly, which is a much bigger dependency)
+- ❌ Batch processing multiple files in one go, and a job queue for large files (right now a request blocks until ffmpeg finishes, fine for typical GIF-sized clips but not for say a 500MB source video).
+
 
 ## Running It
 Before running choosing options, git clone this project onto your machine.
@@ -51,27 +47,33 @@ docker compose up --build
 ```
 This may take a few seconds to build.
 
+*For any new updates, you can `git pull` this repo then choose to delete the docker container or simply run this command again, which will update your Docker instance to match the new version.*
+
 4. On Docker Desktop, press run on the newly created container instance, then open **http://localhost:8000** in a browser to view the WebUI.
 
 ### Run it - Option B: natively (no Docker)
 
-You need Python 3.10+ and the three CLI tools on your PATH.
+You need Python 3.10+ and ffmpeg on your PATH. The other tools are optional —
+the app starts without them and says which features are unavailable.
 
 **macOS:**
 ```
-brew install ffmpeg gifsicle imagemagick
+brew install ffmpeg                              # required
+brew install gifsicle imagemagick libavif jpeg-xl  # optional
 ./run.sh
 ```
 
 **Linux (Debian/Ubuntu):**
 ```
-sudo apt-get install ffmpeg gifsicle imagemagick
+sudo apt-get install ffmpeg                                        # required
+sudo apt-get install gifsicle imagemagick libavif-bin libjxl-tools # optional
 ./run.sh
 ```
 
 **Windows** (using [Chocolatey](https://chocolatey.org/install), run as admin):
 ```
-choco install ffmpeg gifsicle imagemagick
+choco install ffmpeg              # required
+choco install gifsicle imagemagick  # optional
 run.bat
 ```
 

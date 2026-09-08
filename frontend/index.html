@@ -3,178 +3,585 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GIF Studio (local)</title>
-<link rel="stylesheet" href="style.css">
+<title>GIFMe</title>
+<link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <header>
-  <h1>GIFMe</h1>
-  <div id="health"></div>
+  <h1>GIFMe <span class="badge">local</span></h1>
+  <div id="health-wrap">
+    <button id="health" type="button"></button>
+    <div id="health-panel" hidden></div>
+  </div>
 </header>
 
 <nav id="tabs">
   <button data-tab="make" class="active">GIF Maker</button>
-  <button data-tab="convert">Convert</button>
+  <button data-tab="video">Video to GIF</button>
   <button data-tab="resize">Resize</button>
   <button data-tab="crop">Crop</button>
-  <button data-tab="rotate">Rotate / Flip</button>
+  <button data-tab="rotate">Rotate</button>
   <button data-tab="speed">Speed</button>
+  <button data-tab="cut">Cut</button>
   <button data-tab="reverse">Reverse</button>
   <button data-tab="effects">Effects</button>
   <button data-tab="text">Add Text</button>
+  <button data-tab="overlay">Overlay</button>
+  <button data-tab="censor">Censor</button>
   <button data-tab="optimize">Optimize</button>
-  <button data-tab="split">Split Frames</button>
+  <button data-tab="split">Split</button>
+  <button data-tab="sprite">Sprite Sheet</button>
+  <button data-tab="convert">Convert</button>
   <button data-tab="analyze">Analyzer</button>
 </nav>
 
+<!-- The file every tool works on. Upload once, then keep applying tools. -->
+<section id="workspace" hidden>
+  <div id="ws-thumb"></div>
+  <div class="ws-info">
+    <strong id="ws-name"></strong>
+    <span id="ws-facts" class="muted"></span>
+  </div>
+  <div class="ws-actions">
+    <a id="ws-download" class="button ghost" href="#" download>Download</a>
+    <button id="ws-reset" class="ghost">Reset to original</button>
+    <button id="ws-change" class="ghost">Use another file</button>
+  </div>
+</section>
+
+<section id="ws-empty">
+  <div id="ws-drop" class="dropzone">
+    <strong>Drop a GIF, image or video here</strong>
+    <span class="hint">or <label class="link" for="ws-file">choose a file</label> - every tool below
+      then works on it. Pick "Set as input" on a result to keep editing it.</span>
+    <input type="file" id="ws-file" accept="image/*,video/*" hidden>
+  </div>
+</section>
+
 <main>
 
+  <!-- ================= GIF Maker ================= -->
   <section class="panel active" id="panel-make">
     <h2>GIF Maker</h2>
-    <p class="hint">Video → GIF, or a batch of still images → GIF.</p>
-    <div class="row">
-      <div class="card">
-        <h3>From video</h3>
-        <input type="file" id="make-video-file" accept="video/*">
-        <label>FPS <input type="number" id="make-fps" value="15" min="1" max="50"></label>
-        <label>Width (px, blank = original) <input type="number" id="make-width" value="480"></label>
-        <label>Start (s) <input type="number" id="make-start" value="0" step="0.1"></label>
-        <label>Duration (s, 0 = full) <input type="number" id="make-duration" value="0" step="0.1"></label>
-        <button onclick="Actions.videoToGif()">Create GIF</button>
-      </div>
-      <div class="card">
-        <h3>From images</h3>
-        <input type="file" id="make-images-files" accept="image/*" multiple>
-        <label>Delay per frame (ms) <input type="number" id="make-delay" value="100"></label>
-        <label>Width (px, blank = original) <input type="number" id="make-images-width"></label>
-        <button onclick="Actions.imagesToGif()">Create GIF</button>
-      </div>
+    <p class="hint">Combine images into an animated GIF. You can also drop in a GIF or a
+      video to load its frames for editing.</p>
+
+    <div id="maker-drop" class="dropzone small">
+      <strong>+ Upload frames</strong>
+      <span class="hint">images, a .zip of images, a GIF, or a video</span>
+      <input type="file" id="maker-files" accept="image/*,video/*,.zip" multiple hidden>
+    </div>
+
+    <div id="maker-toolbar" class="toolbar" hidden>
+      <button id="maker-add">+ Upload more frames</button>
+      <button id="maker-sort" class="ghost">Sort by name</button>
+      <button id="maker-reverse" class="ghost">Reverse order</button>
+      <button id="maker-clear-skips" class="ghost">Clear all skips</button>
+      <button id="maker-clear" class="danger">Clear frames</button>
+      <span id="maker-count" class="muted"></span>
+    </div>
+
+    <div id="frame-list" class="frame-strip"></div>
+
+    <div id="maker-options" hidden>
+      <fieldset id="range-panel">
+        <legend>Toggle a range of frames:</legend>
+        <label class="pin"><input type="checkbox" id="pin-toggle"> Pin to screen</label>
+        <div class="line">
+          <label>From: <input type="number" id="range-from" value="1" min="1"></label>
+          <label>To: <input type="number" id="range-to" value="5" min="1"></label>
+          <button id="range-skip" class="danger">Skip range</button>
+          <button id="range-enable">Enable range</button>
+        </div>
+        <div class="line">
+          <label>Every: <input type="number" id="range-every" value="2" min="2"></label>
+          <button id="nth-skip" class="danger">Skip every N-th</button>
+          <button id="nth-enable">Enable every N-th</button>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>GIF options:</legend>
+        <div class="line">
+          <label>Delay time: <input type="number" id="gif-delay" value="20" min="1"></label>
+          <label>Framerate (FPS): <input type="number" id="gif-fps" value="5" min="0.01" step="0.01"></label>
+          <span class="hint">(delay in 1/100 of second; the two fields follow each other, and
+            changing either resets the delay for all frames)</span>
+        </div>
+        <div class="line">
+          <label>Loop count: <input type="number" id="gif-loop" min="0" placeholder=""></label>
+          <span class="hint">(Empty = loop forever)</span>
+        </div>
+        <div class="line">
+          <label>Width: <input type="number" id="gif-width" placeholder="auto"></label>
+          <label>Height: <input type="number" id="gif-height" placeholder="auto"></label>
+          <span class="hint">(blank = size of the largest frame)</span>
+        </div>
+        <label class="check"><input type="checkbox" id="gif-colormap">
+          use global colormap
+          <span class="hint">(Use the same set of colors for all frames to reduce file size)</span></label>
+        <label class="check"><input type="checkbox" id="gif-dither" checked>
+          dither
+          <span class="hint">(Smoother gradients, slightly larger file)</span></label>
+        <label class="check"><input type="checkbox" id="gif-preserve-transparency" checked>
+          preserve transparency</label>
+        <div class="line">
+          <label>Converter:
+            <select id="gif-converter">
+              <option value="pillow">Pillow - frame-accurate delays (recommended)</option>
+              <option value="imagemagick">ImageMagick</option>
+              <option value="ffmpeg">ffmpeg - constant frame rate</option>
+            </select>
+          </label>
+          <span class="hint">ffmpeg averages the delays; the other two keep them exactly.</span>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Effects:</legend>
+        <label class="check"><input type="checkbox" id="fx-crossfade"> crossfade frames</label>
+        <div id="crossfade-options" class="sub" hidden>
+          <label>Fader delay: <input type="number" id="fx-fade-delay" value="6" min="1"></label>
+          <label>Framerate (FPS): <input type="number" id="fx-fade-fps" value="16.67" min="0.01" step="0.01"></label>
+          <label>Fader frames: <input type="number" id="fx-fade-steps" value="5" min="1" max="30"></label>
+        </div>
+        <label class="check"><input type="checkbox" id="fx-dispose">
+          don't stack frames
+          <span class="hint">(Remove the frame when it's time to display next one, use for
+            images with transparent background)</span></label>
+        <div id="dispose-options" class="sub" hidden>
+          <label class="check"><input type="checkbox" id="fx-first-bg">
+            use the first frame as background</label>
+        </div>
+      </fieldset>
+
+      <button id="maker-build" class="primary big">Make a GIF!</button>
     </div>
   </section>
 
-  <section class="panel" id="panel-convert">
-    <h2>Convert</h2>
-    <input type="file" id="convert-file" accept="image/gif">
-    <label>Target format
-      <select id="convert-target">
-        <option value="mp4">MP4</option>
-        <option value="webm">WebM</option>
-        <option value="webp">Animated WebP</option>
-        <option value="apng">APNG</option>
-      </select>
-    </label>
-    <button onclick="Actions.convert()">Convert</button>
+  <!-- ================= Video to GIF ================= -->
+  <section class="panel" id="panel-video">
+    <h2>Video to GIF</h2>
+    <form class="tool-form" data-endpoint="/api/video-to-gif" data-label="GIF created">
+      <input type="file" accept="video/*">
+      <div class="line">
+        <label>Start time (s) <input type="number" name="start" value="0" step="0.1"></label>
+        <label>End time (s) <input type="number" name="end" placeholder="end of clip" step="0.1"></label>
+      </div>
+      <div class="line">
+        <label>Frame rate <input type="number" name="fps" value="15" min="1" max="50"></label>
+        <label>Width <input type="number" name="width" value="480"></label>
+        <label>Height <input type="number" name="height" placeholder="auto"></label>
+      </div>
+      <p class="hint">Leave height blank to keep the aspect ratio. Encoding uses a two-pass
+        palette, which is what keeps colours clean.</p>
+      <button type="submit" class="primary">Convert to GIF</button>
+    </form>
   </section>
 
+  <!-- ================= Resize ================= -->
   <section class="panel" id="panel-resize">
     <h2>Resize</h2>
-    <input type="file" id="resize-file" accept="image/gif,video/*">
-    <label>Width (blank = auto) <input type="number" id="resize-width"></label>
-    <label>Height (blank = auto) <input type="number" id="resize-height"></label>
-    <p class="hint">Leave one blank to preserve aspect ratio.</p>
-    <button onclick="Actions.resize()">Resize</button>
+    <form class="tool-form" data-endpoint="/api/resize" data-label="Resized">
+      <div class="line">
+        <label>Width <input type="number" name="width" placeholder="auto"></label>
+        <label>Height <input type="number" name="height" placeholder="auto"></label>
+        <label>or Percentage <input type="number" name="percent" placeholder="e.g. 50" step="1"></label>
+      </div>
+      <div class="line">
+        <label>Resample method
+          <select name="method">
+            <option value="lanczos">Lanczos (best quality)</option>
+            <option value="bicubic">Bicubic</option>
+            <option value="bilinear">Bilinear</option>
+            <option value="hamming">Hamming</option>
+            <option value="box">Box</option>
+            <option value="nearest">Nearest (pixel art)</option>
+          </select>
+        </label>
+        <label class="check"><input type="checkbox" name="keep_aspect" checked> keep aspect ratio</label>
+        <label class="check"><input type="checkbox" name="preserve_transparency" checked> preserve transparency</label>
+      </div>
+      <button type="submit" class="primary">Resize</button>
+    </form>
   </section>
 
+  <!-- ================= Crop ================= -->
   <section class="panel" id="panel-crop">
     <h2>Crop</h2>
-    <input type="file" id="crop-file" accept="image/gif,video/*">
-    <div class="row">
-      <label>X <input type="number" id="crop-x" value="0"></label>
-      <label>Y <input type="number" id="crop-y" value="0"></label>
-      <label>Width <input type="number" id="crop-w" value="200"></label>
-      <label>Height <input type="number" id="crop-h" value="200"></label>
-    </div>
-    <button onclick="Actions.crop()">Crop</button>
+    <div id="crop-stage" class="stage"></div>
+    <form class="tool-form" data-endpoint="/api/crop" data-label="Cropped">
+      <div class="line">
+        <label>X <input type="number" name="x" id="crop-x" value="0"></label>
+        <label>Y <input type="number" name="y" id="crop-y" value="0"></label>
+        <label>Width <input type="number" name="w" id="crop-w" value="0"></label>
+        <label>Height <input type="number" name="h" id="crop-h" value="0"></label>
+        <label>Aspect ratio
+          <select id="crop-ratio">
+            <option value="free">Free</option>
+            <option value="1:1">1:1 square</option>
+            <option value="4:3">4:3</option>
+            <option value="16:9">16:9</option>
+            <option value="3:2">3:2</option>
+            <option value="9:16">9:16 vertical</option>
+          </select>
+        </label>
+      </div>
+      <label class="check"><input type="checkbox" name="preserve_transparency" checked> preserve transparency</label>
+      <button type="submit" class="primary">Crop</button>
+    </form>
   </section>
 
+  <!-- ================= Rotate ================= -->
   <section class="panel" id="panel-rotate">
-    <h2>Rotate / Flip</h2>
-    <input type="file" id="rotate-file" accept="image/gif,video/*">
-    <div class="row">
-      <button onclick="Actions.rotate(90)">Rotate 90°</button>
-      <button onclick="Actions.rotate(180)">Rotate 180°</button>
-      <button onclick="Actions.rotate(270)">Rotate 270°</button>
-      <button onclick="Actions.flip('horizontal')">Flip horizontal</button>
-      <button onclick="Actions.flip('vertical')">Flip vertical</button>
+    <h2>Rotate &amp; Flip</h2>
+    <div class="toolbar">
+      <button data-degrees="90">Rotate 90°</button>
+      <button data-degrees="180">Rotate 180°</button>
+      <button data-degrees="270">Rotate 270°</button>
+      <button data-axis="horizontal">Flip horizontal</button>
+      <button data-axis="vertical">Flip vertical</button>
     </div>
+    <label class="check"><input type="checkbox" id="rotate-preserve-transparency" checked> preserve transparency</label>
+    <fieldset>
+      <legend>Any angle</legend>
+      <div class="line">
+        <label>Degrees <input type="number" id="rotate-degrees" value="45" step="1"></label>
+        <label>Fill colour <input type="color" id="rotate-bg" value="#000000"></label>
+        <button id="rotate-custom-run" class="primary">Rotate</button>
+      </div>
+      <p class="hint">Corners exposed by an off-axis rotation are filled with this colour.</p>
+    </fieldset>
   </section>
 
+  <!-- ================= Speed ================= -->
   <section class="panel" id="panel-speed">
     <h2>Speed</h2>
-    <input type="file" id="speed-file" accept="image/gif,video/*">
-    <label>Speed factor (2 = twice as fast, 0.5 = half speed)
-      <input type="number" id="speed-factor" value="1" step="0.1">
-    </label>
-    <button onclick="Actions.speed()">Apply</button>
+    <form class="tool-form" data-endpoint="/api/speed" data-label="Speed changed">
+      <label>Speed factor <input type="number" name="factor" id="speed-factor" value="1" step="0.1" min="0.1"></label>
+      <p class="hint" id="speed-hint"></p>
+      <p class="hint">2 = twice as fast, 0.5 = half speed. Per-frame delays are scaled, so
+        uneven timing is preserved.</p>
+      <div class="line">
+        <label>…or one delay for every frame - Delay time (ms)
+          <input type="number" name="delay_ms" id="speed-delay" min="1" placeholder="e.g. 100"></label>
+        <label>Framerate (FPS)
+          <input type="number" name="fps" id="speed-fps" min="0.01" step="0.01" placeholder="e.g. 10"></label>
+      </div>
+      <label class="check"><input type="checkbox" name="preserve_transparency" checked> preserve transparency</label>
+      <button type="submit" class="primary">Apply</button>
+    </form>
+    <form class="tool-form" data-endpoint="/api/loop" data-label="Loop count set">
+      <fieldset>
+        <legend>Loop count</legend>
+        <div class="line">
+          <label>Play the GIF <input type="number" name="loop" value="0" min="0"> times</label>
+          <span class="hint">0 = loop forever.</span>
+        </div>
+        <label class="check"><input type="checkbox" name="preserve_transparency" checked> preserve transparency</label>
+        <button type="submit">Set loop count</button>
+      </fieldset>
+    </form>
   </section>
 
+  <!-- ================= Cut ================= -->
+  <section class="panel" id="panel-cut">
+    <h2>Cut / Trim</h2>
+    <form class="tool-form" data-endpoint="/api/cut" data-label="Trimmed">
+      <div class="line">
+        <label>Start (s) <input type="number" name="start" value="0" step="0.1"></label>
+        <label>End (s) <input type="number" name="end" placeholder="end" step="0.1"></label>
+      </div>
+      <div class="line">
+        <label>…or start frame <input type="number" name="start_frame" placeholder="1" min="1"></label>
+        <label>…or end frame <input type="number" name="end_frame" placeholder="last" min="1"></label>
+      </div>
+      <p class="hint">Frame numbers take priority over times when both are filled in.</p>
+      <label class="check"><input type="checkbox" name="preserve_transparency" checked> preserve transparency</label>
+      <button type="submit" class="primary">Cut</button>
+    </form>
+  </section>
+
+  <!-- ================= Reverse ================= -->
   <section class="panel" id="panel-reverse">
     <h2>Reverse</h2>
-    <input type="file" id="reverse-file" accept="image/gif,video/*">
-    <button onclick="Actions.reverse()">Reverse</button>
+    <form class="tool-form" data-endpoint="/api/reverse" data-label="Reversed">
+      <p class="hint">Plays the frames back to front, keeping each frame's own delay.</p>
+      <label class="check"><input type="checkbox" name="preserve_transparency" checked> preserve transparency</label>
+      <button type="submit" class="primary">Reverse</button>
+    </form>
   </section>
 
+  <!-- ================= Effects ================= -->
   <section class="panel" id="panel-effects">
     <h2>Effects</h2>
-    <input type="file" id="effects-file" accept="image/gif,video/*">
-    <label>Effect
-      <select id="effects-name">
-        <option value="grayscale">Grayscale</option>
-        <option value="sepia">Sepia</option>
-        <option value="invert">Invert</option>
-        <option value="blur">Blur</option>
-        <option value="sharpen">Sharpen</option>
-        <option value="pixelate">Pixelate</option>
-      </select>
-    </label>
-    <button onclick="Actions.effect()">Apply</button>
+    <form class="tool-form" data-endpoint="/api/effect" data-label="Effect applied">
+      <label>Preset
+        <select name="name">
+          <option value="none">None (adjustments only)</option>
+          <option value="grayscale">Grayscale</option>
+          <option value="sepia">Sepia</option>
+          <option value="invert">Invert</option>
+          <option value="posterize">Posterize</option>
+          <option value="solarize">Solarize</option>
+          <option value="threshold">Threshold</option>
+          <option value="emboss">Emboss</option>
+          <option value="edge">Edge detect</option>
+          <option value="blur">Blur</option>
+          <option value="sharpen">Sharpen</option>
+          <option value="pixelate">Pixelate</option>
+        </select>
+      </label>
+      <fieldset>
+        <legend>Adjustments</legend>
+        <label class="slider">Brightness <output></output>
+          <input type="range" name="brightness" min="0" max="200" value="100"></label>
+        <label class="slider">Contrast <output></output>
+          <input type="range" name="contrast" min="0" max="200" value="100"></label>
+        <label class="slider">Saturation <output></output>
+          <input type="range" name="saturation" min="0" max="200" value="100"></label>
+        <label class="slider">Hue shift <output></output>
+          <input type="range" name="hue" min="0" max="360" value="0"></label>
+        <label class="slider">Blur <output></output>
+          <input type="range" name="blur" min="0" max="20" value="0"></label>
+        <label class="slider">Sharpen <output></output>
+          <input type="range" name="sharpen" min="0" max="4" step="0.1" value="0"></label>
+        <label class="slider">Pixelate <output></output>
+          <input type="range" name="pixelate" min="0" max="40" value="0"></label>
+        <label class="slider">Vignette <output></output>
+          <input type="range" name="vignette" min="0" max="100" value="0"></label>
+        <label class="slider">Opacity <output></output>
+          <input type="range" name="opacity" min="0" max="100" value="100"></label>
+      </fieldset>
+      <fieldset>
+        <legend>Border &amp; colour overlay</legend>
+        <div class="line">
+          <label>Border width <input type="number" name="border" value="0" min="0"></label>
+          <label>Border colour <input type="color" name="border_color" value="#000000"></label>
+        </div>
+        <div class="line">
+          <label>Overlay colour <input type="color" name="overlay_color" value="#ff0000"></label>
+          <label class="slider">Overlay strength <output></output>
+            <input type="range" name="overlay_opacity" min="0" max="100" value="0"></label>
+        </div>
+      </fieldset>
+      <label class="check"><input type="checkbox" name="preserve_transparency" checked> preserve transparency</label>
+      <button type="submit" class="primary">Apply</button>
+    </form>
   </section>
 
+  <!-- ================= Add Text ================= -->
   <section class="panel" id="panel-text">
     <h2>Add Text</h2>
-    <input type="file" id="text-file" accept="image/gif,video/*">
-    <label>Text <input type="text" id="text-content" value="Hello!"></label>
-    <label>Position
-      <select id="text-position">
-        <option value="bottom">Bottom</option>
-        <option value="top">Top</option>
-        <option value="center">Center</option>
-      </select>
-    </label>
-    <label>Font size <input type="number" id="text-size" value="28"></label>
-    <label>Color <input type="text" id="text-color" value="white"></label>
-    <button onclick="Actions.text()">Add text</button>
+    <form class="tool-form" data-endpoint="/api/text" data-label="Text added">
+      <label>Text <textarea name="text" rows="2">Hello!</textarea></label>
+      <div class="line">
+        <label>Position
+          <select name="position">
+            <option value="top-left">Top left</option>
+            <option value="top">Top</option>
+            <option value="top-right">Top right</option>
+            <option value="left">Left</option>
+            <option value="center">Center</option>
+            <option value="right">Right</option>
+            <option value="bottom-left">Bottom left</option>
+            <option value="bottom" selected>Bottom</option>
+            <option value="bottom-right">Bottom right</option>
+          </select>
+        </label>
+        <label>Font
+          <select name="font_path" id="text-font"><option value="">Default</option></select></label>
+        <label>Font size <input type="number" name="font_size" value="28" min="6"></label>
+        <label>Padding <input type="number" name="padding" value="20" min="0"></label>
+      </div>
+      <div class="line">
+        <label>Colour <input type="color" name="color" value="#ffffff"></label>
+        <label>Outline colour <input type="color" name="stroke_color" value="#000000"></label>
+        <label>Outline width <input type="number" name="stroke_width" value="2" min="0" max="12"></label>
+      </div>
+      <div class="line">
+        <label class="check"><input type="checkbox" name="box"> background box</label>
+        <label>Exact X <input type="number" name="x" placeholder="auto" min="0"></label>
+        <label>Exact Y <input type="number" name="y" placeholder="auto" min="0"></label>
+      </div>
+      <div class="line">
+        <label>From frame <input type="number" name="start_frame" placeholder="1" min="1"></label>
+        <label>To frame <input type="number" name="end_frame" placeholder="last" min="1"></label>
+        <span class="hint">Leave blank to caption every frame.</span>
+      </div>
+      <label class="check"><input type="checkbox" name="preserve_transparency" checked> preserve transparency</label>
+      <button type="submit" class="primary">Add text</button>
+    </form>
   </section>
 
+  <!-- ================= Overlay ================= -->
+  <section class="panel" id="panel-overlay">
+    <h2>Overlay an image</h2>
+    <form class="tool-form" data-endpoint="/api/overlay" data-label="Overlay added">
+      <label>Image to overlay (logo, watermark, sticker)
+        <input type="file" accept="image/*" data-extra="overlay_file"></label>
+      <div class="line">
+        <label>Position
+          <select name="position">
+            <option value="">Exact X / Y</option>
+            <option value="top-left">Top left</option>
+            <option value="top">Top</option>
+            <option value="top-right">Top right</option>
+            <option value="center">Center</option>
+            <option value="bottom-left">Bottom left</option>
+            <option value="bottom">Bottom</option>
+            <option value="bottom-right" selected>Bottom right</option>
+          </select>
+        </label>
+        <label>X <input type="number" name="x" value="0"></label>
+        <label>Y <input type="number" name="y" value="0"></label>
+      </div>
+      <div class="line">
+        <label class="slider">Scale % <output></output>
+          <input type="range" name="scale" min="5" max="300" value="100"></label>
+        <label class="slider">Opacity % <output></output>
+          <input type="range" name="opacity" min="5" max="100" value="100"></label>
+      </div>
+      <label class="check"><input type="checkbox" name="preserve_transparency" checked> preserve transparency</label>
+      <button type="submit" class="primary">Add overlay</button>
+    </form>
+  </section>
+
+  <!-- ================= Censor ================= -->
+  <section class="panel" id="panel-censor">
+    <h2>Censor</h2>
+    <p class="hint">Blur, pixelate or black out an area across every frame.</p>
+    <div id="censor-stage" class="stage"></div>
+    <form class="tool-form" data-endpoint="/api/censor" data-label="Censored">
+      <div class="line">
+        <label>X <input type="number" name="x" id="censor-x" value="0"></label>
+        <label>Y <input type="number" name="y" id="censor-y" value="0"></label>
+        <label>Width <input type="number" name="w" id="censor-w" value="0"></label>
+        <label>Height <input type="number" name="h" id="censor-h" value="0"></label>
+      </div>
+      <div class="line">
+        <label>Mode
+          <select name="mode">
+            <option value="blur">Blur</option>
+            <option value="pixelate">Pixelate</option>
+            <option value="black">Black box</option>
+          </select>
+        </label>
+        <label class="slider">Strength <output></output>
+          <input type="range" name="strength" min="2" max="40" value="12"></label>
+      </div>
+      <label class="check"><input type="checkbox" name="preserve_transparency" checked> preserve transparency</label>
+      <button type="submit" class="primary">Censor</button>
+    </form>
+  </section>
+
+  <!-- ================= Optimize ================= -->
   <section class="panel" id="panel-optimize">
     <h2>Optimize</h2>
-    <p class="hint">Uses gifsicle.</p>
-    <input type="file" id="optimize-file" accept="image/gif">
-    <label>Lossy level (0–200, higher = smaller/worse) <input type="number" id="optimize-lossy" value="30"></label>
-    <label>Max colors (blank = keep) <input type="number" id="optimize-colors"></label>
-    <button onclick="Actions.optimize()">Optimize</button>
+    <form class="tool-form" data-endpoint="/api/optimize" data-label="Optimized">
+      <label>Method
+        <select name="method">
+          <option value="lossy">Lossy GIF compression</option>
+          <option value="colors">Colour reduction</option>
+          <option value="drop">Drop every N-th frame</option>
+          <option value="transparency">Optimize transparency</option>
+        </select>
+      </label>
+      <div class="line">
+        <label class="slider">Compression level <output></output>
+          <input type="range" name="lossy" min="0" max="200" value="30"></label>
+        <label>Max colours <input type="number" name="colors" placeholder="keep" min="2" max="256"></label>
+      </div>
+      <div class="line">
+        <label>Optimization level
+          <select name="level"><option value="1">1</option><option value="2">2</option>
+            <option value="3" selected>3 (best)</option></select></label>
+        <label>Drop every <input type="number" name="drop_every" placeholder="2" min="2"></label>
+        <label class="check"><input type="checkbox" name="dither" checked> dither</label>
+        <label class="check"><input type="checkbox" name="preserve_transparency" checked> preserve transparency</label>
+      </div>
+      <p class="hint">Lossy compression and transparency optimization use gifsicle; colour
+        reduction and frame dropping work with or without it.</p>
+      <button type="submit" class="primary">Optimize</button>
+    </form>
   </section>
 
+  <!-- ================= Split ================= -->
   <section class="panel" id="panel-split">
-    <h2>Split Frames</h2>
-    <input type="file" id="split-file" accept="image/gif,video/*">
-    <button onclick="Actions.split()">Split into PNG frames (.zip)</button>
+    <h2>Split into frames</h2>
+    <form class="tool-form" data-endpoint="/api/split" data-render="frames">
+      <label>Output format
+        <select name="fmt">
+          <option value="png">PNG</option>
+          <option value="jpg">JPG</option>
+          <option value="gif">GIF</option>
+        </select>
+      </label>
+      <p class="hint">Every frame is listed with its delay, and downloadable individually
+        or as one zip.</p>
+      <button type="submit" class="primary">Split</button>
+    </form>
   </section>
 
+  <!-- ================= Sprite sheet ================= -->
+  <section class="panel" id="panel-sprite">
+    <h2>Sprite sheet</h2>
+    <form class="tool-form" data-endpoint="/api/sprite" data-label="Sprite sheet">
+      <div class="line">
+        <label>Columns <input type="number" name="columns" placeholder="auto" min="1"></label>
+        <label>Padding <input type="number" name="padding" value="0" min="0"></label>
+        <label>Background <input type="color" name="background" value="#000000"></label>
+      </div>
+      <p class="hint">Lays every frame out on one PNG. Leave columns blank for a square grid.</p>
+      <button type="submit" class="primary">Create sprite sheet</button>
+    </form>
+  </section>
+
+  <!-- ================= Convert ================= -->
+  <section class="panel" id="panel-convert">
+    <h2>Convert</h2>
+    <form class="tool-form" data-endpoint="/api/convert" data-label="Converted">
+      <label>Target format
+        <select name="target">
+          <option value="gif">GIF</option>
+          <option value="mp4">MP4</option>
+          <option value="webm">WebM</option>
+          <option value="webp">Animated WebP</option>
+          <option value="apng">APNG</option>
+          <option value="png">PNG (first frame)</option>
+          <option value="jpg">JPG (first frame)</option>
+          <option value="avif">AVIF</option>
+          <option value="jxl">JPEG XL</option>
+        </select>
+      </label>
+      <div class="line">
+        <label class="slider">Quality <output></output>
+          <input type="range" name="quality" min="1" max="100" value="90"></label>
+        <label>Frame rate (video → GIF) <input type="number" name="fps" value="15" min="1"></label>
+        <label class="check"><input type="checkbox" name="lossless"> lossless WebP</label>
+      </div>
+      <label class="check"><input type="checkbox" name="preserve_transparency" checked> preserve transparency
+        <span class="hint">(GIF target only)</span></label>
+      <p class="hint">Conversion works in both directions - a video, WebP or APNG can be
+        turned back into a GIF too.</p>
+      <button type="submit" class="primary">Convert</button>
+    </form>
+  </section>
+
+  <!-- ================= Analyzer ================= -->
   <section class="panel" id="panel-analyze">
     <h2>Analyzer</h2>
-    <input type="file" id="analyze-file" accept="image/gif,video/*">
-    <button onclick="Actions.analyze()">Analyze</button>
-    <pre id="analyze-output"></pre>
+    <button id="analyze-run" class="primary">Analyze current file</button>
+    <div id="analyze-output"></div>
   </section>
 
 </main>
 
-<div id="result">
+<section id="result">
   <h3>Result</h3>
   <div id="result-body"><p class="hint">Output will appear here.</p></div>
-</div>
+</section>
 
-<script src="app.js"></script>
+<script type="module" src="js/app.js"></script>
 </body>
 </html>
