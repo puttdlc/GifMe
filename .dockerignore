@@ -1,7 +1,12 @@
 .venv/
 __pycache__/
+**/__pycache__/
 *.pyc
 .DS_Store
-.env
+.git/
+.gitignore
 backend/workdir/*
 !backend/workdir/.gitkeep
+*.zip
+.env
+README.md

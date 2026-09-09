@@ -2,7 +2,7 @@ services:
   gifstudio:
     build: .
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./backend/workdir:/app/backend/workdir
     environment:
@@ -11,4 +11,18 @@ services:
       # what it reports. Defaults to the path above resolved from wherever
       # you run `docker compose up`; override it if that's not accurate.
       - HOST_WORKDIR=${PWD}/backend/workdir
+      # Self-hosting past localhost: see README "Self-Host" for details.
+      # Set both to require HTTP Basic auth; leave unset for no auth.
+      - GIFME_USERNAME=${GIFME_USERNAME:-}
+      - GIFME_PASSWORD=${GIFME_PASSWORD:-}
+      # Reject uploads over this size (MB). 0 = unlimited.
+      - GIFME_MAX_UPLOAD_MB=${GIFME_MAX_UPLOAD_MB:-500}
+      # Delete a job's files this many hours after its last write. 0 = never.
+      - GIFME_JOB_TTL_HOURS=${GIFME_JOB_TTL_HOURS:-24}
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

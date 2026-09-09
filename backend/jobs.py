@@ -12,6 +12,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 import uuid
 from pathlib import Path
 
@@ -25,6 +26,15 @@ WORK_DIR = APP_DIR / "workdir"
 WORK_DIR.mkdir(exist_ok=True)
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff", ".avif"}
+
+# Public-facing deployments need a cap - without one a single upload can fill
+# the disk. 0 (or unset) disables the check for local/trusted use.
+MAX_UPLOAD_BYTES = int(os.environ.get("GIFME_MAX_UPLOAD_MB", "0") or "0") * 1024 * 1024
+
+# How long a job's files stick around before being swept. Public deployments
+# accumulate uploads/outputs forever otherwise; 0 disables the sweep.
+JOB_TTL_HOURS = float(os.environ.get("GIFME_JOB_TTL_HOURS", "24") or "0")
+_UPLOAD_CHUNK = 1024 * 1024
 
 
 def new_job() -> Path:
@@ -66,8 +76,20 @@ def save_upload(upload: UploadFile, d: Path) -> Path:
     dest = d / safe_name(upload.filename)
     if dest.exists():
         dest = d / f"{dest.stem}_{uuid.uuid4().hex[:4]}{dest.suffix}"
-    with dest.open("wb") as f:
-        shutil.copyfileobj(upload.file, f)
+    written = 0
+    try:
+        with dest.open("wb") as f:
+            while chunk := upload.file.read(_UPLOAD_CHUNK):
+                written += len(chunk)
+                if MAX_UPLOAD_BYTES and written > MAX_UPLOAD_BYTES:
+                    raise HTTPException(
+                        413,
+                        f"file exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)} MB upload limit",
+                    )
+                f.write(chunk)
+    except HTTPException:
+        dest.unlink(missing_ok=True)
+        raise
     return dest
 
 
@@ -141,6 +163,28 @@ def clear_workdir(keep: str | None = None) -> None:
             shutil.rmtree(entry, ignore_errors=True)
         else:
             entry.unlink(missing_ok=True)
+
+
+def sweep_stale_jobs(ttl_hours: float | None = None) -> int:
+    """Delete job directories whose newest file is older than ttl_hours.
+    Keeps a public deployment's disk usage bounded without user action.
+    Returns the number of job directories removed."""
+    ttl = JOB_TTL_HOURS if ttl_hours is None else ttl_hours
+    if not ttl or ttl <= 0:
+        return 0
+    cutoff = time.time() - ttl * 3600
+    removed = 0
+    for entry in WORK_DIR.iterdir():
+        if not entry.is_dir():
+            continue
+        try:
+            newest = max((p.stat().st_mtime for p in entry.rglob("*") if p.is_file()), default=entry.stat().st_mtime)
+        except OSError:
+            continue
+        if newest < cutoff:
+            shutil.rmtree(entry, ignore_errors=True)
+            removed += 1
+    return removed
 
 
 def _is_containerized() -> bool:
