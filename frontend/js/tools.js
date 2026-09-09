@@ -15,6 +15,8 @@ export function initTools() {
   bindAnalyzer();
   bindSpeedHints();
   bindEffectPresets();
+  bindOptimizeMethod();
+  bindAutoUse();
   loadFonts();
 }
 
@@ -40,6 +42,196 @@ function bindEffectPresets() {
       slider.dispatchEvent(new Event('input', { bubbles: true }));
     });
   });
+}
+
+const OPTIMIZE_HINTS = {
+  lossy: 'Lossy compression uses gifsicle to fuzz pixel data for a smaller file.',
+  colors: 'Colour reduction re-quantizes every frame against one shared, smaller palette.',
+  drop: 'Dropping frames shortens playback but keeps colours and pixels untouched.',
+  transparency: 'Strips redundant transparency/extension data that gifsicle otherwise keeps.',
+  colormap: 'Forces every frame onto one shared colour table instead of per-frame tables. Set max colours to 256 to shrink the file without a visible quality loss.',
+  combined: 'Runs lossy compression, colour reduction and transparency stripping together.',
+  auto: 'Tries every method above, weakest first, keeping whichever attempt is smallest, until the target size is hit or three attempts in a row help not at all.',
+};
+
+// The Optimize tab's method dropdown only shows the fields that method
+// actually uses, so switching between lossy/colour/drop/transparency/combined
+// doesn't leave unrelated controls sitting on screen.
+function bindOptimizeMethod() {
+  const select = $('#panel-optimize select[name=method]');
+  if (!select) return;
+  const fields = $$('#panel-optimize .opt-field');
+  const hint = $('#optimize-hint');
+
+  const apply = () => {
+    const method = select.value;
+    fields.forEach(field => {
+      field.hidden = !field.dataset.methods.split(',').includes(method);
+    });
+    if (hint) hint.textContent = OPTIMIZE_HINTS[method] || '';
+    resetAutoProgress();
+  };
+
+  select.addEventListener('change', apply);
+  apply();
+}
+
+const AUTO_CATEGORIES = ['lossy', 'colors', 'colormap', 'drop'];
+
+// The "Use:" checkboxes let the automated run skip specific compression
+// families entirely. At least one has to stay checked - unchecking the last
+// remaining box would leave the algorithm nothing to try - so block that
+// instead of only catching it once the run is already started.
+function bindAutoUse() {
+  const boxes = $$('#panel-optimize .auto-use input[type=checkbox]');
+  if (!boxes.length) return;
+  boxes.forEach(box => box.addEventListener('change', () => {
+    if (!box.checked && boxes.every(b => !b.checked)) {
+      box.checked = true;
+      toast('At least one compression method has to stay in use.', 'error');
+    }
+  }));
+}
+
+function resetAutoProgress() {
+  const panel = $('#auto-progress');
+  if (!panel) return;
+  $('#auto-stage').textContent = 'Ready';
+  $('#auto-size').textContent = '';
+  $('#auto-progress-fill').style.width = '0%';
+  $('#auto-progress-fill').classList.remove('met', 'stalled');
+  $('#auto-steps').innerHTML = '';
+  const continueBtn = $('#auto-continue');
+  continueBtn.hidden = true;
+  continueBtn.onclick = null;
+}
+
+// Streams one automated-optimize request (initial or continuation) and
+// updates the progress panel live as each newline-delimited JSON event
+// arrives, so the UI shows which stage is running instead of going blank
+// until the whole thing finishes. Returns the final "done" event.
+async function streamAutoRequest(fd, ctx) {
+  const { stage, size, fill, steps, originalBytes } = ctx;
+  const res = await fetch('/api/optimize/auto', { method: 'POST', body: fd });
+  if (!res.ok || !res.body) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || `Request failed (${res.status})`);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let finalEvent = null;
+
+  const handleEvent = (evt) => {
+    if (evt.done) {
+      if (evt.error) throw new Error(evt.error);
+      finalEvent = evt;
+      return;
+    }
+
+    stage.textContent = `Step ${evt.step}/${evt.total}: ${evt.label}${evt.ok ? '' : ' (skipped)'}`;
+    size.textContent = evt.size_bytes
+      ? `${bytes(evt.best_bytes)} (best) - target ${bytes(evt.target_bytes)}`
+      : `best so far: ${bytes(evt.best_bytes)} - target ${bytes(evt.target_bytes)}`;
+
+    const base = originalBytes || evt.best_bytes;
+    const denom = base - evt.target_bytes;
+    const pct = denom > 0 ? ((base - evt.best_bytes) / denom) * 100 : 100;
+    fill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+    fill.classList.toggle('met', evt.target_met);
+    fill.classList.toggle('stalled', evt.stalled && !evt.target_met);
+
+    const status = !evt.ok ? 'error' : evt.improved ? 'improved' : 'no-gain';
+    steps.append(el('li', { class: `auto-step ${status}` },
+      el('span', { class: 'auto-step-label' }, evt.label),
+      el('span', { class: 'auto-step-size' },
+        evt.ok ? bytes(evt.size_bytes) : (evt.error || 'failed'))));
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop();
+    for (const line of lines) {
+      if (line.trim()) handleEvent(JSON.parse(line));
+    }
+  }
+  if (buffer.trim()) handleEvent(JSON.parse(buffer));
+  if (!finalEvent) throw new Error('The automated run ended without a result');
+  return finalEvent;
+}
+
+// Paints the outcome of a (sub-)run and, if the backend says more untried
+// methods are left, wires up "Continue anyway" to pick up right where this
+// one stopped instead of starting over.
+function renderAutoFinal(finalEvent, ctx) {
+  const { stage, size, fill } = ctx;
+  stage.textContent = finalEvent.target_met
+    ? 'Target reached'
+    : finalEvent.resumable
+      ? 'Paused - no improvement for a while, but other methods are untried'
+      : 'Stopped - every method has now been tried, closest result kept (target not reached)';
+  fill.classList.toggle('met', finalEvent.target_met);
+  fill.classList.toggle('stalled', !finalEvent.target_met);
+  if (finalEvent.target_met) fill.style.width = '100%';
+  size.textContent = `${bytes(finalEvent.size_bytes)} - target ${bytes(finalEvent.target_bytes)}`;
+  showResult(finalEvent, 'Automated Target Size');
+
+  const continueBtn = $('#auto-continue');
+  continueBtn.hidden = !finalEvent.resumable;
+  continueBtn.onclick = finalEvent.resumable
+    ? () => withBusy(continueBtn, () => runAutoContinuation(ctx, finalEvent))
+    : null;
+}
+
+// The backend only overrides its own stall check for the stages tried within
+// a single call, so "Continue anyway" is a fresh request that resumes from
+// the next untried stage, uses the previous best result as the size to beat
+// (and the fallback if nothing here beats it either), and forces at least
+// 5 more stages to run regardless of whether they help.
+async function runAutoContinuation(ctx, prevFinal) {
+  const fd = new FormData();
+  fd.append('target_mb', String(ctx.targetMb));
+  fd.append('ignore', ctx.ignored.join(','));
+  fd.append('job', prevFinal.job);
+  fd.append('resume_from', String(prevFinal.next_step));
+  fd.append('baseline_name', prevFinal.name);
+  fd.append('force_steps', '5');
+
+  ctx.stage.textContent = 'Continuing…';
+  const finalEvent = await streamAutoRequest(fd, ctx);
+  renderAutoFinal(finalEvent, ctx);
+}
+
+// Runs the automated "Target Size" method from scratch.
+async function runAutoOptimize(form, fields) {
+  const used = AUTO_CATEGORIES.filter(c => fields[`use_${c}`] === 'true');
+  if (!used.length) {
+    throw new Error('At least one compression method has to stay in use.');
+  }
+  const ignored = AUTO_CATEGORIES.filter(c => !used.includes(c));
+
+  const targetMb = Number(fields.target_mb) || 1;
+  const file = fileFrom(form);
+  const fd = new FormData();
+  fd.append('target_mb', String(targetMb));
+  fd.append('ignore', ignored.join(','));
+  if (fields.job) fd.append('job', fields.job);
+  if (file) fd.append('file', file);
+
+  resetAutoProgress();
+  const ctx = {
+    stage: $('#auto-stage'), size: $('#auto-size'), fill: $('#auto-progress-fill'),
+    steps: $('#auto-steps'), originalBytes: file ? file.size : state.sizeBytes,
+    targetMb, ignored,
+  };
+  ctx.stage.textContent = 'Starting…';
+
+  const finalEvent = await streamAutoRequest(fd, ctx);
+  renderAutoFinal(finalEvent, ctx);
 }
 
 // The Add Text tab offers whatever fonts this machine actually has.
@@ -71,17 +263,23 @@ function bindForm(form) {
     const fields = readFields(form);
     if (state.job) fields.job = state.job;
 
+    if (form.id === 'optimize-form' && fields.method === 'auto') {
+      await withBusy(button, () => runAutoOptimize(form, fields));
+      return;
+    }
+
     const files = {};
     if (file) files.file = file;
     const extra = form.querySelector('input[type=file][data-extra]');
     if (extra?.files?.length) files[extra.dataset.extra] = extra.files[0];
+    const beforeBytes = file ? file.size : state.sizeBytes;
 
     await withBusy(button, async () => {
       const r = await post(endpoint, fields, files);
       if (form.dataset.render === 'frames') {
         showFrameGrid('Split into frames', r.frames, r.zip_url);
       } else {
-        showResult(r, form.dataset.label || 'Done');
+        showResult(r, form.dataset.label || 'Done', { beforeBytes });
       }
     });
   });
@@ -105,9 +303,10 @@ function bindRotate() {
 async function runRotate(button, fields, endpoint = '/api/rotate') {
   if (!state.job) return toast('Upload a file first', 'error');
   const preserveTransparency = $('#rotate-preserve-transparency').checked;
+  const beforeBytes = state.sizeBytes;
   await withBusy(button, async () => {
     const r = await post(endpoint, { ...fields, preserve_transparency: preserveTransparency, job: state.job });
-    showResult(r, 'Done');
+    showResult(r, 'Done', { beforeBytes });
   });
 }
 

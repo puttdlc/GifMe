@@ -1,10 +1,11 @@
 // Entry point: tabs, dependency banner, and module wiring.
 
-import { get } from './api.js';
+import { get, post } from './api.js';
 import { initMaker } from './maker.js';
+import { clearCurrent, state } from './state.js';
 import { initTools } from './tools.js';
 import { initWorkspace, setUploaderVisible } from './workspace.js';
-import { $, $$, el, initSliders } from './ui.js';
+import { $, $$, bytes, el, initSliders, toast } from './ui.js';
 
 function initTabs() {
   const buttons = $$('#tabs button');
@@ -63,9 +64,63 @@ async function initHealth() {
   }
 }
 
+// The output-folder chip: file count + total size of everything GifMe has
+// ever written to disk, with buttons to reveal or wipe that folder.
+async function refreshWorkdirStats() {
+  const label = $('#workdir-stats');
+  try {
+    const { count, size_bytes, path } = await get('/api/workdir');
+    label.textContent = `${count} file${count === 1 ? '' : 's'}, ${bytes(size_bytes)}`;
+    if (path) $('#workdir-open').title = path;
+  } catch {
+    label.textContent = '';
+  }
+}
+
+function initWorkdir() {
+  $('#workdir-open').addEventListener('click', async () => {
+    try {
+      const r = await post('/api/workdir/open', {});
+      // Headless setups (containers, remote dev environments) have no GUI to
+      // open a file manager in at all - that's not an error, just tell them
+      // where the folder is instead (it's also always in this button's title).
+      if (!r.opened) {
+        toast(r.docker
+          ? `Running in Docker, so this can't open a folder on your machine - it's at ${r.path} on the host`
+          : `No file manager available here - output folder: ${r.path}`);
+      }
+    } catch (e) {
+      toast(e.message || String(e), 'error');
+    }
+  });
+
+  $('#workdir-clear').addEventListener('click', async () => {
+    // Two prompts: first, only if a file is actively being worked on, ask
+    // whether to take it down too; then a final go/no-go on the wipe itself.
+    let keepCurrent = false;
+    if (state.job) {
+      keepCurrent = !confirm('Delete the current working input as well? OK removes it too, Cancel keeps it.');
+    }
+    if (!confirm('Proceed with clearing the output folder? This cannot be undone.')) return;
+
+    try {
+      await post('/api/workdir/clear', keepCurrent ? { keep_job: state.job } : {});
+      if (!keepCurrent) clearCurrent();
+      toast(keepCurrent ? 'Output folder cleared - current file kept' : 'Output folder cleared');
+      refreshWorkdirStats();
+    } catch (e) {
+      toast(e.message || String(e), 'error');
+    }
+  });
+
+  refreshWorkdirStats();
+  setInterval(refreshWorkdirStats, 15000);
+}
+
 initTabs();
 setUploaderVisible($('#tabs button.active').dataset.tab !== 'make');
 initHealth();
+initWorkdir();
 initWorkspace();
 initMaker();
 initTools();

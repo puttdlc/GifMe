@@ -97,17 +97,33 @@ function previewNode(url, name, small = false) {
   return el('img', { src: bust, alt: name, class: small ? 'thumb' : '' });
 }
 
+// A colored "X% smaller/bigger" (or "about the same size") node comparing
+// the file going into a tool against what came out of it - green shrank,
+// red grew, gray is close enough not to matter. Every tab's result gets
+// this, not just Optimize, so it's generic over any before/after size pair.
+function sizeChangeNode(beforeBytes, afterBytes) {
+  if (!beforeBytes || !afterBytes) return null;
+  const pct = ((beforeBytes - afterBytes) / beforeBytes) * 100;
+  const abs = Math.abs(pct);
+  if (abs < 1) return el('span', { class: 'size-delta unchanged' }, 'about the same size');
+  const cls = pct > 0 ? 'smaller' : 'bigger';
+  return el('span', { class: `size-delta ${cls}` }, `${abs.toFixed(1)}% ${cls}`);
+}
+
 // Show a finished operation. It stays a side-by-side result until the user
 // explicitly promotes it to the working file with "Set as input".
-export function showResult(result, label = 'Done') {
+// `opts.beforeBytes` is the input file's size, for tools the backend doesn't
+// already report an original_bytes/saved_percent pair for.
+export function showResult(result, label = 'Done', opts = {}) {
   const body = $('#result-body');
   body.innerHTML = '';
   const notes = [];
   if (result.meta?.width) notes.push(`${result.meta.width}×${result.meta.height}`);
   if (result.meta?.nb_frames > 1) notes.push(`${result.meta.nb_frames} frames`);
   notes.push(bytes(result.size_bytes));
-  if (result.saved_percent) notes.push(`${result.saved_percent}% smaller`);
   if (result.frame_count) notes.push(`${result.frame_count} frames used`);
+
+  const delta = sizeChangeNode(result.original_bytes ?? opts.beforeBytes, result.size_bytes);
 
   const useBtn = el('button', { class: 'button' }, 'Set as input');
   useBtn.addEventListener('click', async () => {
@@ -119,10 +135,13 @@ export function showResult(result, label = 'Done') {
     toast(`${result.name} is now the working file`);
   });
 
+  const summary = el('span', { class: 'muted' }, notes.join(' · '));
+  if (delta) summary.append(' · ', delta);
+
   body.append(
     el('div', { class: 'result-head' },
       el('strong', {}, label),
-      el('span', { class: 'muted' }, notes.join(' · '))),
+      summary),
     previewNode(result.url, result.name),
     el('div', { class: 'result-actions' },
       el('a', { class: 'button', href: result.url, download: result.name }, `Download ${result.name}`),

@@ -7,7 +7,8 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
 import gifme
-from jobs import file_url, guard, job_dir, read_state, resolve, set_current, write_state
+from jobs import (clear_workdir, file_url, guard, job_dir, open_workdir, read_state,
+                  resolve, set_current, workdir_stats, write_state)
 
 router = APIRouter(prefix="/api")
 
@@ -15,6 +16,22 @@ router = APIRouter(prefix="/api")
 @router.get("/health")
 def health():
     return gifme.check_dependencies()
+
+
+@router.get("/workdir")
+def workdir_info():
+    return workdir_stats()
+
+
+@router.post("/workdir/open")
+def workdir_open():
+    return guard(open_workdir)
+
+
+@router.post("/workdir/clear")
+def workdir_clear(keep_job: str = Form(None)):
+    guard(clear_workdir, keep=keep_job)
+    return workdir_stats()
 
 
 @router.get("/fonts")

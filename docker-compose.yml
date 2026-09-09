@@ -5,4 +5,10 @@ services:
       - "8000:8000"
     volumes:
       - ./backend/workdir:/app/backend/workdir
+    environment:
+      # The container can't pop open a file manager on your host, so the
+      # "Output Folder" button just reports where to look instead - this is
+      # what it reports. Defaults to the path above resolved from wherever
+      # you run `docker compose up`; override it if that's not accurate.
+      - HOST_WORKDIR=${PWD}/backend/workdir
     restart: unless-stopped

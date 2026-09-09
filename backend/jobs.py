@@ -8,7 +8,10 @@ keeps a file around between tools.
 from __future__ import annotations
 
 import json
+import os
 import shutil
+import subprocess
+import sys
 import uuid
 from pathlib import Path
 
@@ -115,6 +118,79 @@ def result(d: Path, out: Path, extra: dict | None = None) -> JSONResponse:
     }
     payload.update(extra or {})
     return JSONResponse(payload)
+
+
+def workdir_stats() -> dict:
+    """File count and total size of everything a job has ever produced."""
+    count, size = 0, 0
+    for p in WORK_DIR.rglob("*"):
+        if p.is_file() and p.name != ".gitkeep":
+            count += 1
+            size += p.stat().st_size
+    return {"count": count, "size_bytes": size, "path": str(WORK_DIR)}
+
+
+def clear_workdir(keep: str | None = None) -> None:
+    """Delete every job - uploads and outputs alike - to reclaim disk space.
+    Pass `keep` (a job id) to leave that one job's directory in place, for
+    when the user wants to keep their current working file after clearing."""
+    for entry in WORK_DIR.iterdir():
+        if entry.name in (".gitkeep", keep):
+            continue
+        if entry.is_dir():
+            shutil.rmtree(entry, ignore_errors=True)
+        else:
+            entry.unlink(missing_ok=True)
+
+
+def _is_containerized() -> bool:
+    """Best-effort check for running inside Docker. No opener binary - real
+    or otherwise - can make a process in a container pop up a window on the
+    host, so this case has to be handled before even trying one."""
+    if Path("/.dockerenv").exists():
+        return True
+    try:
+        return "docker" in Path("/proc/1/cgroup").read_text()
+    except OSError:
+        return False
+
+
+def open_workdir() -> dict:
+    """Reveal the output folder in the OS file manager - this only makes
+    sense when the server and browser are on the same machine, which is
+    GifMe's whole deal (see the "local" badge in the UI). Inside a container
+    there is no host GUI to hand off to, and the container's own path (e.g.
+    /app/backend/workdir) isn't anywhere the host can browse to - so report
+    HOST_WORKDIR (set it in docker-compose.yml) or a sensible guess instead.
+    Other headless setups (a remote box with no desktop) get the real path,
+    since at least that one is accurate there."""
+    path = str(WORK_DIR)
+    if _is_containerized():
+        host_path = os.environ.get("HOST_WORKDIR") or "./backend/workdir (next to docker-compose.yml on your host machine)"
+        return {"opened": False, "path": host_path, "docker": True}
+
+    try:
+        if sys.platform == "win32":
+            # No PATH lookup, no subprocess, no "explorer" doesn't exist on
+            # this machine's PATH edge cases - just ask Windows to open it.
+            os.startfile(path)  # type: ignore[attr-defined]
+            return {"opened": True, "path": path}
+
+        # macOS ships exactly one opener; Linux desktops ship a handful,
+        # since there's no single binary guaranteed across GNOME/KDE/Xfce/etc.
+        candidates = ["open"] if sys.platform == "darwin" else [
+            "xdg-open", "gio", "gnome-open", "kde-open5", "kde-open",
+        ]
+        for cmd in candidates:
+            exe = shutil.which(cmd)
+            if not exe:
+                continue
+            args = [exe, "open", path] if cmd == "gio" else [exe, path]
+            subprocess.Popen(args)
+            return {"opened": True, "path": path}
+    except OSError:
+        pass
+    return {"opened": False, "path": path, "docker": False}
 
 
 def guard(fn, *args, **kwargs):

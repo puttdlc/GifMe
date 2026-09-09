@@ -1,12 +1,13 @@
 """Producing output: optimize, convert, split, sprite sheet."""
 from __future__ import annotations
 
+import json
 import shutil
 import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 import gifme
 from jobs import file_url, guard, new_job, out_path, resolve, result, save_upload, suffix_of
@@ -31,6 +32,65 @@ async def optimize(file: UploadFile = File(None), job: str = Form(None),
         "saved_bytes": saved,
         "saved_percent": round(saved / before * 100, 1) if before else 0,
     })
+
+
+@router.post("/optimize/auto")
+async def optimize_auto(file: UploadFile = File(None), job: str = Form(None),
+                        target_mb: float = Form(1.0), ignore: str = Form(""),
+                        resume_from: int = Form(0), baseline_name: str = Form(None),
+                        force_steps: int = Form(0)):
+    """The "(Automated) Target Size" method: streams one JSON line per attempt
+    as gifme.auto_target_size works through its ladder of strategies, so the
+    UI can show live progress instead of blocking until the whole run ends.
+    `ignore` is a comma-separated list of AUTO_CATEGORIES to skip entirely.
+    `resume_from`/`baseline_name`/`force_steps` pick a stalled run back up
+    from where it left off - the "Continue Anyway" button in the UI - using
+    an earlier call's output (`baseline_name`, a file in this job's folder)
+    as the size to beat instead of starting over from the original."""
+    d, src = resolve(job, file)
+    out = out_path(d, ".gif")
+    before = src.stat().st_size
+    target_bytes = max(1024, int(target_mb * 1024 * 1024))
+    ignored = {c.strip() for c in ignore.split(",") if c.strip()}
+    baseline_path = str(d / baseline_name) if baseline_name else None
+
+    def stream():
+        last = None
+        try:
+            for progress in gifme.auto_target_size(str(src), str(out), target_bytes,
+                                                    ignore=ignored, resume_from=resume_from,
+                                                    baseline_path=baseline_path,
+                                                    force_steps=force_steps):
+                last = progress
+                yield json.dumps(progress) + "\n"
+        except gifme.ToolError as e:
+            yield json.dumps({"done": True, "error": str(e)}) + "\n"
+            return
+
+        after = out.stat().st_size
+        saved = before - after
+        try:
+            meta = gifme.analyze(str(out))
+        except gifme.ToolError:
+            meta = {"size_bytes": after}
+        yield json.dumps({
+            "done": True,
+            "job": d.name,
+            "name": out.name,
+            "url": file_url(d, out.name),
+            "size_bytes": after,
+            "meta": meta,
+            "original_bytes": before,
+            "saved_bytes": saved,
+            "saved_percent": round(saved / before * 100, 1) if before else 0,
+            "target_bytes": target_bytes,
+            "target_met": after <= target_bytes,
+            "resumable": bool(last and last.get("resumable")),
+            "next_step": last["step"] if last else resume_from,
+            "total": last["total"] if last else 0,
+        }) + "\n"
+
+    return StreamingResponse(stream(), media_type="application/x-ndjson")
 
 
 @router.post("/convert")

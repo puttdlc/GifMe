@@ -9,9 +9,16 @@
 <body>
 <header>
   <h1>GIFMe <span class="badge">local</span></h1>
-  <div id="health-wrap">
-    <button id="health" type="button"></button>
-    <div id="health-panel" hidden></div>
+  <div class="header-right">
+    <div id="workdir-wrap">
+      <span id="workdir-stats" class="muted"></span>
+      <button id="workdir-open" type="button" class="ghost">Output Folder</button>
+      <button id="workdir-clear" type="button" class="ghost" title="Delete everything in the output folder" aria-label="Delete everything in the output folder">🗑</button>
+    </div>
+    <div id="health-wrap">
+      <button id="health" type="button"></button>
+      <div id="health-panel" hidden></div>
+    </div>
   </div>
 </header>
 
@@ -478,30 +485,50 @@
   <!-- ================= Optimize ================= -->
   <section class="panel" id="panel-optimize">
     <h2>Optimize</h2>
-    <form class="tool-form" data-endpoint="/api/optimize" data-label="Optimized">
+    <form class="tool-form" id="optimize-form" data-endpoint="/api/optimize" data-label="Optimized">
       <label>Method
         <select name="method">
-          <option value="lossy">Lossy GIF compression</option>
+          <option value="lossy" selected>Lossy GIF compression</option>
           <option value="colors">Colour reduction</option>
           <option value="drop">Drop every N-th frame</option>
           <option value="transparency">Optimize transparency</option>
+          <option value="colormap">Eliminate local colour tables</option>
+          <option value="combined">All combined (lossy + colour + transparency)</option>
+          <option value="auto">(Automated) Target Size</option>
         </select>
       </label>
       <div class="line">
-        <label class="slider">Compression level <output></output>
+        <label class="slider opt-field" data-methods="lossy,combined">Compression level <output></output>
           <input type="range" name="lossy" min="0" max="200" value="30"></label>
-        <label>Max colours <input type="number" name="colors" placeholder="keep" min="2" max="256"></label>
+        <label class="opt-field" data-methods="colors,colormap,combined">Max colours <input type="number" name="colors" placeholder="keep" min="2" max="256" value="128">
+          <span class="hint">(0-256; blank = keep all)</span></label>
+        <label class="opt-field" data-methods="auto">Target size (MB) <input type="number" name="target_mb" min="0.05" step="0.05" value="1"></label>
       </div>
       <div class="line">
-        <label>Optimization level
+        <label class="opt-field" data-methods="lossy,colors,transparency,colormap,combined">Optimization level
           <select name="level"><option value="1">1</option><option value="2">2</option>
             <option value="3" selected>3 (best)</option></select></label>
-        <label>Drop every <input type="number" name="drop_every" placeholder="2" min="2"></label>
-        <label class="check"><input type="checkbox" name="dither" checked> dither</label>
-        <label class="check"><input type="checkbox" name="preserve_transparency" checked> preserve transparency</label>
+        <label class="opt-field" data-methods="drop">Drop every <input type="number" name="drop_every" placeholder="2" min="2"></label>
+        <label class="check opt-field" data-methods="colors,colormap,combined"><input type="checkbox" name="dither" checked> dither</label>
+        <label class="check opt-field" data-methods="drop,transparency,colormap,combined"><input type="checkbox" name="preserve_transparency" checked> preserve transparency</label>
       </div>
-      <p class="hint">Lossy compression and transparency optimization use gifsicle; colour
-        reduction and frame dropping work with or without it.</p>
+      <div class="opt-field auto-use" data-methods="auto">
+        <span class="auto-use-label">Use:</span>
+        <label class="check"><input type="checkbox" name="use_lossy" value="lossy" checked> Lossy compression</label>
+        <label class="check"><input type="checkbox" name="use_colors" value="colors" checked> Colour reduction</label>
+        <label class="check"><input type="checkbox" name="use_colormap" value="colormap" checked> Local colour tables</label>
+        <label class="check"><input type="checkbox" name="use_drop" value="drop" checked> Frame dropping</label>
+      </div>
+      <p class="hint" id="optimize-hint">Lossy compression uses gifsicle to fuzz pixel data for a smaller file.</p>
+      <div class="opt-field auto-progress" id="auto-progress" data-methods="auto" hidden>
+        <div class="auto-progress-head">
+          <span id="auto-stage">Ready</span>
+          <span id="auto-size" class="muted"></span>
+        </div>
+        <div class="auto-progress-bar"><div id="auto-progress-fill" class="auto-progress-fill"></div></div>
+        <ol id="auto-steps" class="auto-steps"></ol>
+        <button type="button" id="auto-continue" class="ghost" hidden>Continue anyway (5 more steps)</button>
+      </div>
       <button type="submit" class="primary">Optimize</button>
     </form>
   </section>

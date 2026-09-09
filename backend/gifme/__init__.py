@@ -23,7 +23,7 @@ from .extract import extract_frames, make_thumbnails, split_frames
 from .frames import DEFAULT_DELAY_MS, load_frames, map_frames, save_gif
 from .geometry import RESAMPLE, crop, flip, resize, rotate
 from .maker import build_gif, images_to_gif, video_to_gif
-from .optimize import optimize_gif, reduce_colors
+from .optimize import auto_target_size, optimize_gif, reduce_colors
 from .probe import analyze, kind_of
 from .runner import check_dependencies
 from .text import POSITIONS, add_text, list_fonts
@@ -31,10 +31,10 @@ from .timing import change_speed, cut, drop_frames, reverse, set_delay, set_loop
 
 __all__ = [
     "ToolError", "DEFAULT_DELAY_MS", "NAMED_EFFECTS", "POSITIONS", "RESAMPLE",
-    "add_text", "analyze", "apply_effect", "build_gif", "censor", "change_speed",
-    "check_dependencies", "convert", "crop", "cut", "drop_frames", "extract_frames",
-    "flip", "images_to_gif", "kind_of", "list_fonts", "load_frames", "make_thumbnails",
-    "map_frames", "optimize_gif", "overlay_image", "parse_color", "reduce_colors",
-    "resize", "reverse", "rotate", "save_gif", "set_delay", "set_loop", "split_frames",
-    "sprite_sheet", "video_to_gif",
+    "add_text", "analyze", "apply_effect", "auto_target_size", "build_gif", "censor",
+    "change_speed", "check_dependencies", "convert", "crop", "cut", "drop_frames",
+    "extract_frames", "flip", "images_to_gif", "kind_of", "list_fonts", "load_frames",
+    "make_thumbnails", "map_frames", "optimize_gif", "overlay_image", "parse_color",
+    "reduce_colors", "resize", "reverse", "rotate", "save_gif", "set_delay", "set_loop",
+    "split_frames", "sprite_sheet", "video_to_gif",
 ]
