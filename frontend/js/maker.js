@@ -2,7 +2,7 @@
 // drag reordering, range toggles, and the GIF/effect options.
 
 import { post } from './api.js';
-import { setCurrent, state } from './state.js';
+import { hasFile, state, subscribe } from './state.js';
 import { showResult } from './workspace.js';
 import { MS_PER_CS, linkDelayFps } from './timing.js';
 import { $, $$, el, toast, withBusy } from './ui.js';
@@ -25,6 +25,9 @@ export function initMaker() {
     e.preventDefault(); $('#maker-drop').classList.remove('over');
   }));
   $('#maker-drop').addEventListener('drop', e => loadFrames(e.dataTransfer.files));
+
+  $('#maker-load-current').addEventListener('click', loadCurrentInput);
+  subscribe(() => { $('#maker-load-current').disabled = !hasFile(); });
 
   $('#range-skip').addEventListener('click', () => applyRange(true));
   $('#range-enable').addEventListener('click', () => applyRange(false));
@@ -92,6 +95,19 @@ function seedDelays(added, startingFresh) {
     const avg = timed.reduce((sum, f) => sum + f.delay_ms, 0) / timed.length;
     gifTiming.setDelayMs(Math.max(MS_PER_CS, avg));
   }
+}
+
+// Pulls the workspace's current file (set by another tab, or a prior
+// result) into the frame editor, so a GIF/video sitting in the shared
+// input can be re-opened for frame-level editing without re-uploading it.
+async function loadCurrentInput() {
+  if (!hasFile()) return;
+  await withBusy($('#maker-load-current'), async () => {
+    const res = await fetch(state.url);
+    const blob = await res.blob();
+    const file = new File([blob], state.name, { type: blob.type });
+    await loadFrames([file]);
+  });
 }
 
 function clearFrames() {
