@@ -2,6 +2,7 @@
 // the result panel. Uploading once and chaining tools is the whole point.
 
 import { post } from './api.js';
+import { downloadWithProgress } from './download.js';
 import { clearCurrent, setCurrent, state, subscribe } from './state.js';
 import { $, bytes, el, isVideoName, toast, withBusy } from './ui.js';
 
@@ -47,6 +48,11 @@ export function initWorkspace() {
     input.value = '';
   });
 
+  $('#ws-download').addEventListener('click', () => {
+    if (!state.url) return;
+    downloadWithProgress(state.url, state.name);
+  });
+
   subscribe(render);
 }
 
@@ -74,8 +80,7 @@ function render(s) {
   $('#ws-thumb').append(previewNode(s.url, s.name, true));
   $('#ws-name').textContent = s.name;
   $('#ws-facts').textContent = factLine(s.meta, s.sizeBytes);
-  $('#ws-download').href = s.url;
-  $('#ws-download').setAttribute('download', s.name);
+  $('#ws-download').disabled = false;
 }
 
 function factLine(meta, size) {
@@ -92,7 +97,14 @@ function factLine(meta, size) {
 function previewNode(url, name, small = false) {
   const bust = `${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`;
   if (isVideoName(name)) {
-    return el('video', { src: bust, controls: '', autoplay: '', loop: '', muted: '' });
+    const video = el('video', { src: bust, controls: '', autoplay: '', loop: '', muted: '' });
+    // A video created via document.createElement doesn't reliably honour the
+    // "muted" attribute alone (that only sets defaultMuted) - both the
+    // input preview (workspace bar) and the output preview (result panel)
+    // go through here, so setting the actual property covers both.
+    video.muted = true;
+    video.defaultMuted = true;
+    return video;
   }
   return el('img', { src: bust, alt: name, class: small ? 'thumb' : '' });
 }
@@ -138,13 +150,16 @@ export function showResult(result, label = 'Done', opts = {}) {
   const summary = el('span', { class: 'muted' }, notes.join(' · '));
   if (delta) summary.append(' · ', delta);
 
+  const downloadBtn = el('button', { class: 'button', type: 'button' }, `Download ${result.name}`);
+  downloadBtn.addEventListener('click', () => downloadWithProgress(result.url, result.name));
+
   body.append(
     el('div', { class: 'result-head' },
       el('strong', {}, label),
       summary),
     previewNode(result.url, result.name),
     el('div', { class: 'result-actions' },
-      el('a', { class: 'button', href: result.url, download: result.name }, `Download ${result.name}`),
+      downloadBtn,
       useBtn,
       el('span', { class: 'hint' }, 'Pick "Set as input" to keep editing this result - otherwise the next tool still works on the current input.')),
   );
@@ -158,8 +173,9 @@ export function showFrameGrid(title, frames, zipUrl) {
     el('strong', {}, title),
     el('span', { class: 'muted' }, `${frames.length} frames`)));
   if (zipUrl) {
-    body.append(el('div', { class: 'result-actions' },
-      el('a', { class: 'button', href: zipUrl, download: 'frames.zip' }, 'Download all as .zip')));
+    const zipBtn = el('button', { class: 'button', type: 'button' }, 'Download all as .zip');
+    zipBtn.addEventListener('click', () => downloadWithProgress(zipUrl, 'frames.zip'));
+    body.append(el('div', { class: 'result-actions' }, zipBtn));
   }
   const grid = el('div', { class: 'frame-grid' });
   frames.forEach(f => grid.append(el('a', { class: 'frame-cell', href: f.url, download: f.name },

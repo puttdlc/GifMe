@@ -3,6 +3,7 @@
 
 import { get, post, readFields } from './api.js';
 import { createCropper } from './cropper.js';
+import { progressBusy, progressEnd, progressSet, progressStart } from './progress.js';
 import { state, subscribe } from './state.js';
 import { linkDelayFps } from './timing.js';
 import { showFrameGrid, showResult, upload } from './workspace.js';
@@ -104,64 +105,111 @@ function resetAutoProgress() {
   const continueBtn = $('#auto-continue');
   continueBtn.hidden = true;
   continueBtn.onclick = null;
+  const stopBtn = $('#auto-stop');
+  stopBtn.hidden = true;
+  stopBtn.disabled = false;
+  stopBtn.onclick = null;
+}
+
+function makeRunId() {
+  return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 // Streams one automated-optimize request (initial or continuation) and
 // updates the progress panel live as each newline-delimited JSON event
 // arrives, so the UI shows which stage is running instead of going blank
-// until the whole thing finishes. Returns the final "done" event.
+// until the whole thing finishes. Also drives the global top-of-page
+// progress bar, so a long run doesn't look stalled if you're not looking
+// straight at this panel. Returns the final "done" event.
 async function streamAutoRequest(fd, ctx) {
   const { stage, size, fill, steps, originalBytes } = ctx;
-  const res = await fetch('/api/optimize/auto', { method: 'POST', body: fd });
-  if (!res.ok || !res.body) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || `Request failed (${res.status})`);
-  }
 
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let finalEvent = null;
+  // Identifies this specific request to the "Stop" button below - see
+  // _STOP_REQUESTS on the backend. Generated fresh per call (including each
+  // "Continue anyway"), since it only needs to live as long as this fetch.
+  const runId = makeRunId();
+  fd.append('run_id', runId);
 
-  const handleEvent = (evt) => {
-    if (evt.done) {
-      if (evt.error) throw new Error(evt.error);
-      finalEvent = evt;
-      return;
+  const stopBtn = $('#auto-stop');
+  let stopRequested = false;
+  stopBtn.hidden = false;
+  stopBtn.disabled = false;
+  stopBtn.onclick = async () => {
+    if (stopRequested) return;
+    stopRequested = true;
+    stopBtn.disabled = true;
+    stage.textContent = 'Stopping - finishing the current step…';
+    try {
+      await post('/api/optimize/auto/stop', { run_id: runId });
+    } catch {
+      // The run's own response below is what actually finalizes things -
+      // a failed stop request just means the loop keeps going to the end.
     }
-
-    stage.textContent = `Step ${evt.step}/${evt.total}: ${evt.label}${evt.ok ? '' : ' (skipped)'}`;
-    size.textContent = evt.size_bytes
-      ? `${bytes(evt.best_bytes)} (best) - target ${bytes(evt.target_bytes)}`
-      : `best so far: ${bytes(evt.best_bytes)} - target ${bytes(evt.target_bytes)}`;
-
-    const base = originalBytes || evt.best_bytes;
-    const denom = base - evt.target_bytes;
-    const pct = denom > 0 ? ((base - evt.best_bytes) / denom) * 100 : 100;
-    fill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
-    fill.classList.toggle('met', evt.target_met);
-    fill.classList.toggle('stalled', evt.stalled && !evt.target_met);
-
-    const status = !evt.ok ? 'error' : evt.improved ? 'improved' : 'no-gain';
-    steps.append(el('li', { class: `auto-step ${status}` },
-      el('span', { class: 'auto-step-label' }, evt.label),
-      el('span', { class: 'auto-step-size' },
-        evt.ok ? bytes(evt.size_bytes) : (evt.error || 'failed'))));
   };
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop();
-    for (const line of lines) {
-      if (line.trim()) handleEvent(JSON.parse(line));
+  progressStart(fd.has('file') ? 'Uploading…' : 'Processing…');
+
+  try {
+    const res = await fetch('/api/optimize/auto', { method: 'POST', body: fd });
+    progressBusy('Optimizing…');
+    if (!res.ok || !res.body) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || `Request failed (${res.status})`);
     }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let finalEvent = null;
+
+    const handleEvent = (evt) => {
+      if (evt.done) {
+        if (evt.error) throw new Error(evt.error);
+        finalEvent = evt;
+        return;
+      }
+
+      const label = evt.stopped ? 'Stopping…' : `Step ${evt.step}/${evt.total}: ${evt.label}${evt.ok ? '' : ' (skipped)'}`;
+      stage.textContent = label;
+      size.textContent = evt.size_bytes
+        ? `${bytes(evt.best_bytes)} (best) - target ${bytes(evt.target_bytes)}`
+        : `best so far: ${bytes(evt.best_bytes)} - target ${bytes(evt.target_bytes)}`;
+
+      const base = originalBytes || evt.best_bytes;
+      const denom = base - evt.target_bytes;
+      const pct = denom > 0 ? ((base - evt.best_bytes) / denom) * 100 : 100;
+      const clamped = Math.max(0, Math.min(100, pct));
+      fill.style.width = `${clamped}%`;
+      fill.classList.toggle('met', evt.target_met);
+      fill.classList.toggle('stalled', evt.stalled && !evt.target_met);
+      progressSet(clamped / 100, `${label} (${Math.round(clamped)}%)`);
+
+      if (evt.stopped) return;
+      const status = !evt.ok ? 'error' : evt.improved ? 'improved' : 'no-gain';
+      steps.append(el('li', { class: `auto-step ${status}` },
+        el('span', { class: 'auto-step-label' }, evt.label),
+        el('span', { class: 'auto-step-size' },
+          evt.ok ? bytes(evt.size_bytes) : (evt.error || 'failed'))));
+    };
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (line.trim()) handleEvent(JSON.parse(line));
+      }
+    }
+    if (buffer.trim()) handleEvent(JSON.parse(buffer));
+    if (!finalEvent) throw new Error('The automated run ended without a result');
+    return finalEvent;
+  } finally {
+    stopBtn.hidden = true;
+    stopBtn.onclick = null;
+    progressEnd();
   }
-  if (buffer.trim()) handleEvent(JSON.parse(buffer));
-  if (!finalEvent) throw new Error('The automated run ended without a result');
-  return finalEvent;
 }
 
 // Paints the outcome of a (sub-)run and, if the backend says more untried
@@ -171,9 +219,13 @@ function renderAutoFinal(finalEvent, ctx) {
   const { stage, size, fill } = ctx;
   stage.textContent = finalEvent.target_met
     ? 'Target reached'
-    : finalEvent.resumable
-      ? 'Paused - no improvement for a while, but other methods are untried'
-      : 'Stopped - every method has now been tried, closest result kept (target not reached)';
+    : finalEvent.stopped
+      ? finalEvent.resumable
+        ? 'Stopped - kept the best result found so far (other methods were still untried)'
+        : 'Stopped - kept the best result found so far'
+      : finalEvent.resumable
+        ? 'Paused - no improvement for a while, but other methods are untried'
+        : 'Finished - every method has now been tried, closest result kept (target not reached)';
   fill.classList.toggle('met', finalEvent.target_met);
   fill.classList.toggle('stalled', !finalEvent.target_met);
   if (finalEvent.target_met) fill.style.width = '100%';

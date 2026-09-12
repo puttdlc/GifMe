@@ -14,6 +14,19 @@ from jobs import file_url, guard, new_job, out_path, resolve, result, save_uploa
 
 router = APIRouter(prefix="/api")
 
+# Lets the "Stop" button on the (Automated) Target Size run interrupt a
+# request that's still streaming, without needing a websocket or job
+# cancellation plumbing: the frontend hands each run a random id up front,
+# the stream checks this set before every stage, and the stop endpoint just
+# adds the id to it. Cleared once the run that owns it ends, win or lose.
+_STOP_REQUESTS: set[str] = set()
+
+
+@router.post("/optimize/auto/stop")
+async def optimize_auto_stop(run_id: str = Form(...)):
+    _STOP_REQUESTS.add(run_id)
+    return {"ok": True}
+
 
 @router.post("/optimize")
 async def optimize(file: UploadFile = File(None), job: str = Form(None),
@@ -38,7 +51,7 @@ async def optimize(file: UploadFile = File(None), job: str = Form(None),
 async def optimize_auto(file: UploadFile = File(None), job: str = Form(None),
                         target_mb: float = Form(1.0), ignore: str = Form(""),
                         resume_from: int = Form(0), baseline_name: str = Form(None),
-                        force_steps: int = Form(0)):
+                        force_steps: int = Form(0), run_id: str = Form(None)):
     """The "(Automated) Target Size" method: streams one JSON line per attempt
     as gifme.auto_target_size works through its ladder of strategies, so the
     UI can show live progress instead of blocking until the whole run ends.
@@ -46,7 +59,9 @@ async def optimize_auto(file: UploadFile = File(None), job: str = Form(None),
     `resume_from`/`baseline_name`/`force_steps` pick a stalled run back up
     from where it left off - the "Continue Anyway" button in the UI - using
     an earlier call's output (`baseline_name`, a file in this job's folder)
-    as the size to beat instead of starting over from the original."""
+    as the size to beat instead of starting over from the original.
+    `run_id` identifies this call for the "Stop" button - see
+    optimize_auto_stop above."""
     d, src = resolve(job, file)
     out = out_path(d, ".gif")
     before = src.stat().st_size
@@ -57,15 +72,18 @@ async def optimize_auto(file: UploadFile = File(None), job: str = Form(None),
     def stream():
         last = None
         try:
-            for progress in gifme.auto_target_size(str(src), str(out), target_bytes,
-                                                    ignore=ignored, resume_from=resume_from,
-                                                    baseline_path=baseline_path,
-                                                    force_steps=force_steps):
+            for progress in gifme.auto_target_size(
+                    str(src), str(out), target_bytes, ignore=ignored, resume_from=resume_from,
+                    baseline_path=baseline_path, force_steps=force_steps,
+                    should_stop=(lambda: run_id in _STOP_REQUESTS) if run_id else None):
                 last = progress
                 yield json.dumps(progress) + "\n"
         except gifme.ToolError as e:
             yield json.dumps({"done": True, "error": str(e)}) + "\n"
             return
+        finally:
+            if run_id:
+                _STOP_REQUESTS.discard(run_id)
 
         after = out.stat().st_size
         saved = before - after
@@ -85,6 +103,7 @@ async def optimize_auto(file: UploadFile = File(None), job: str = Form(None),
             "saved_percent": round(saved / before * 100, 1) if before else 0,
             "target_bytes": target_bytes,
             "target_met": after <= target_bytes,
+            "stopped": bool(last and last.get("stopped")),
             "resumable": bool(last and last.get("resumable")),
             "next_step": last["step"] if last else resume_from,
             "total": last["total"] if last else 0,

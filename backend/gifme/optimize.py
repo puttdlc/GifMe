@@ -4,7 +4,7 @@ from __future__ import annotations
 import shutil
 import uuid
 from pathlib import Path
-from typing import Iterator
+from typing import Callable, Iterator
 
 from .errors import ToolError
 from .frames import MIN_DELAY_MS, global_palette, load_frames, to_palette
@@ -137,7 +137,8 @@ def _all_stages(ignore: set[str] | None) -> list[tuple[str, dict]]:
 
 def auto_target_size(src: str, dst: str, target_bytes: int, ignore: set[str] | None = None,
                      stall_limit: int = 6, resume_from: int = 0,
-                     baseline_path: str | None = None, force_steps: int = 0) -> Iterator[dict]:
+                     baseline_path: str | None = None, force_steps: int = 0,
+                     should_stop: Callable[[], bool] | None = None) -> Iterator[dict]:
     """Try AUTO_STAGES in order (skipping any whose category is in `ignore`),
     keeping whichever attempt is smallest so far, until the result is at or
     under target_bytes or progress stalls - stall_limit attempts in a row
@@ -154,6 +155,10 @@ def auto_target_size(src: str, dst: str, target_bytes: int, ignore: set[str] | N
     continuation can't immediately re-stall on the same streak that stopped
     the last one.
 
+    `should_stop`, if given, is polled before each stage - the "Stop" button
+    in the UI - and ends the run early the same way stalling does, keeping
+    whatever the best result found so far was.
+
     Yields one progress dict per attempt; the caller should keep iterating
     until exhausted, at which point dst holds the best file found (or the
     baseline / original file untouched, if nothing ever beat it)."""
@@ -168,7 +173,7 @@ def auto_target_size(src: str, dst: str, target_bytes: int, ignore: set[str] | N
         yield {"step": resume_from, "total": total, "label": "Already within target", "ok": True,
               "error": None, "size_bytes": best_size, "best_bytes": best_size,
               "target_bytes": target_bytes, "improved": False, "target_met": True,
-              "stalled": False, "resumable": False}
+              "stalled": False, "resumable": False, "stopped": False}
         shutil.copy(str(fallback_path), dst)
         return
 
@@ -177,7 +182,8 @@ def auto_target_size(src: str, dst: str, target_bytes: int, ignore: set[str] | N
         yield {"step": resume_from, "total": total, "label": label, "ok": False,
               "error": "no compression methods enabled" if not stages else None,
               "size_bytes": best_size, "best_bytes": best_size, "target_bytes": target_bytes,
-              "improved": False, "target_met": False, "stalled": True, "resumable": False}
+              "improved": False, "target_met": False, "stalled": True, "resumable": False,
+              "stopped": False}
         shutil.copy(str(fallback_path), dst)
         return
 
@@ -186,6 +192,15 @@ def auto_target_size(src: str, dst: str, target_bytes: int, ignore: set[str] | N
 
     for offset, (label, params) in enumerate(remaining, start=1):
         i = resume_from + offset
+
+        if should_stop and should_stop():
+            yield {"step": i - 1, "total": total, "label": "Stopped by user", "ok": True,
+                  "error": None, "size_bytes": None, "best_bytes": best_size,
+                  "target_bytes": target_bytes, "improved": False,
+                  "target_met": best_size <= target_bytes, "stalled": False,
+                  "resumable": i - 1 < total, "stopped": True}
+            break
+
         attempt = dst_path.parent / f"_auto_{uuid.uuid4().hex[:8]}.gif"
         ok, error, size = True, None, None
         try:
@@ -214,7 +229,7 @@ def auto_target_size(src: str, dst: str, target_bytes: int, ignore: set[str] | N
         yield {"step": i, "total": total, "label": label, "ok": ok, "error": error,
               "size_bytes": size, "best_bytes": best_size, "target_bytes": target_bytes,
               "improved": improved, "target_met": target_met, "stalled": stalled,
-              "resumable": resumable}
+              "resumable": resumable, "stopped": False}
 
         if target_met or stalled:
             break

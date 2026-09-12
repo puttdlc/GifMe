@@ -152,6 +152,42 @@ def workdir_stats() -> dict:
     return {"count": count, "size_bytes": size, "path": str(WORK_DIR)}
 
 
+def latest_current_file() -> tuple[Path, str] | None:
+    """The job with the most recently touched *current* file, across the
+    whole output folder - the "grab whatever's newest" recovery path for the
+    header button: it works even when nothing in the browser remembers which
+    job was last active (a different browser/device, localStorage cleared),
+    since it only looks at what's actually still on disk.
+
+    Only jobs with a genuine `current` pointer are candidates - a GIF
+    Maker session that was never actually built into a GIF, for instance,
+    is just a folder of loose frames and thumbnails with no one file that
+    represents it, so ranking by "newest file anywhere in the job" would as
+    likely surface a thumbnail as anything meaningful. Ranking by the
+    current file's own mtime (rather than the job folder's) also means a job
+    that was reopened and edited further, but whose newest write happened to
+    be some other artifact, still sorts by when its actual working file
+    last changed.
+
+    Returns (job_dir, filename), or None if nothing qualifies."""
+    newest_dir, newest_name, newest_mtime = None, None, -1.0
+    for entry in WORK_DIR.iterdir():
+        if not entry.is_dir():
+            continue
+        current = read_state(entry).get("current")
+        if not current:
+            continue
+        p = entry / current
+        if not p.exists():
+            continue
+        mtime = p.stat().st_mtime
+        if mtime > newest_mtime:
+            newest_dir, newest_name, newest_mtime = entry, current, mtime
+    if newest_dir is None:
+        return None
+    return newest_dir, newest_name
+
+
 def clear_workdir(keep: str | None = None) -> None:
     """Delete every job - uploads and outputs alike - to reclaim disk space.
     Pass `keep` (a job id) to leave that one job's directory in place, for

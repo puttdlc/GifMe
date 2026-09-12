@@ -2,10 +2,10 @@
 
 import { get, post } from './api.js';
 import { initMaker } from './maker.js';
-import { clearCurrent, state } from './state.js';
+import { clearCurrent, setCurrent, state } from './state.js';
 import { initTools } from './tools.js';
 import { initWorkspace, setUploaderVisible } from './workspace.js';
-import { $, $$, bytes, el, initSliders, toast } from './ui.js';
+import { $, $$, bytes, el, initSliders, toast, withBusy } from './ui.js';
 
 function initTabs() {
   const buttons = $$('#tabs button');
@@ -65,15 +65,20 @@ async function initHealth() {
 }
 
 // The output-folder chip: file count + total size of everything GifMe has
-// ever written to disk, with buttons to reveal or wipe that folder.
+// ever written to disk, with buttons to reveal or wipe that folder. Also
+// what gates the "recover latest" button next to it - it only makes sense
+// to offer once there's actually something in the folder to grab.
 async function refreshWorkdirStats() {
   const label = $('#workdir-stats');
+  const recoverBtn = $('#recover-job');
   try {
     const { count, size_bytes, path } = await get('/api/workdir');
     label.textContent = `${count} file${count === 1 ? '' : 's'}, ${bytes(size_bytes)}`;
     if (path) $('#workdir-open').title = path;
+    recoverBtn.disabled = count === 0;
   } catch {
     label.textContent = '';
+    recoverBtn.disabled = true;
   }
 }
 
@@ -117,6 +122,26 @@ function initWorkdir() {
   setInterval(refreshWorkdirStats, 15000);
 }
 
+// A page refresh wipes the in-memory `state` (job/file/etc), but the actual
+// files are still sitting in the output folder on the backend. This button
+// is the recovery path: enabled whenever the output folder holds anything
+// at all (see refreshWorkdirStats above), it grabs whichever file was most
+// recently touched anywhere in there and loads it as the working input -
+// no need for the browser to have remembered which job it was.
+function initRecovery() {
+  const btn = $('#recover-job');
+  btn.addEventListener('click', () => withBusy(btn, async () => {
+    try {
+      const r = await get('/api/workdir/latest');
+      setCurrent(r);
+      toast(`Loaded ${r.name} as the working input`);
+    } catch (e) {
+      toast(e.message || 'Nothing to recover - the output folder is empty', 'error');
+      refreshWorkdirStats();
+    }
+  }));
+}
+
 initTabs();
 setUploaderVisible($('#tabs button.active').dataset.tab !== 'make');
 initHealth();
@@ -124,4 +149,5 @@ initWorkdir();
 initWorkspace();
 initMaker();
 initTools();
+initRecovery();
 initSliders();

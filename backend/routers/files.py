@@ -7,8 +7,8 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
 import gifme
-from jobs import (clear_workdir, file_url, guard, job_dir, open_workdir, read_state,
-                  resolve, set_current, workdir_stats, write_state)
+from jobs import (clear_workdir, file_url, guard, job_dir, latest_current_file, open_workdir,
+                  read_state, resolve, set_current, workdir_stats, write_state)
 
 router = APIRouter(prefix="/api")
 
@@ -64,6 +64,27 @@ async def upload(file: UploadFile = File(...), job: str = Form(None)):
 async def analyze(file: UploadFile = File(None), job: str = Form(None)):
     _d, src = resolve(job, file)
     return JSONResponse(guard(gifme.analyze, str(src), True))
+
+
+@router.get("/workdir/latest")
+def workdir_latest():
+    """Grab the most recently touched file anywhere in the output folder and
+    hand it back the same shape /upload does, so the header's recovery
+    button can load it straight in as the working file - for when the
+    files are still on disk but nothing in the browser remembers which job
+    they belong to (an accidental refresh, a different browser/device)."""
+    found = latest_current_file()
+    if not found:
+        raise HTTPException(404, "the output folder is empty - nothing to recover")
+    d, name = found
+    p = d / name
+    return {
+        "job": d.name,
+        "name": name,
+        "url": file_url(d, name),
+        "size_bytes": p.stat().st_size,
+        "meta": guard(gifme.analyze, str(p), True),
+    }
 
 
 @router.post("/set-input")

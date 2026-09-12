@@ -18,6 +18,19 @@
     <div id="workdir-wrap">
       <span id="workdir-stats" class="muted"></span>
       <button id="workdir-open" type="button" class="ghost">Output Folder</button>
+      <button id="recover-job" type="button" class="ghost icon-btn" disabled
+        title="Load the most recent file from the output folder as input - recovers your work after an accidental refresh"
+        aria-label="Load most recent output folder file as input">
+        <svg viewBox="0 0 1014 991" width="16" height="16" fill="none" stroke="currentColor"
+          stroke-width="65" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 90 H675" />
+          <path d="M20 90 V980" />
+          <path d="M20 980 H770" />
+          <path d="M925 980 V340" />
+          <path d="M995 15 L345 655" />
+          <path d="M345 230 V655 H770" />
+        </svg>
+      </button>
       <button id="workdir-clear" type="button" class="ghost" title="Delete everything in the output folder" aria-label="Delete everything in the output folder">🗑</button>
     </div>
     <div id="health-wrap">
@@ -55,7 +68,7 @@
     <span id="ws-facts" class="muted"></span>
   </div>
   <div class="ws-actions">
-    <a id="ws-download" class="button ghost" href="#" download>Download</a>
+    <button id="ws-download" type="button" class="button ghost" disabled>Download</button>
     <button id="ws-reset" class="ghost">Reset to original</button>
     <button id="ws-change" class="ghost">Use another file</button>
   </div>
@@ -159,11 +172,11 @@
           <label>Framerate (FPS): <input type="number" id="fx-fade-fps" value="16.67" min="0.01" step="0.01"></label>
           <label>Fader frames: <input type="number" id="fx-fade-steps" value="5" min="1" max="30"></label>
         </div>
-        <label class="check"><input type="checkbox" id="fx-dispose">
+        <label class="check"><input type="checkbox" id="fx-dispose" checked>
           don't stack frames
           <span class="hint">(Remove the frame when it's time to display next one, use for
             images with transparent background)</span></label>
-        <div id="dispose-options" class="sub" hidden>
+        <div id="dispose-options" class="sub">
           <label class="check"><input type="checkbox" id="fx-first-bg">
             use the first frame as background</label>
         </div>
@@ -536,7 +549,11 @@
         <ol id="auto-steps" class="auto-steps"></ol>
         <button type="button" id="auto-continue" class="ghost" hidden>Continue anyway (5 more steps)</button>
       </div>
-      <button type="submit" class="primary">Optimize</button>
+      <div class="optimize-submit-row">
+        <button type="submit" class="primary">Optimize</button>
+        <button type="button" id="auto-stop" class="primary auto-stop-btn" hidden
+          title="Stop and keep the best result found so far" aria-label="Stop">⏹</button>
+      </div>
     </form>
   </section>
 
