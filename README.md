@@ -43,7 +43,7 @@ This should successfully clone this repo to your computer.
 3. `cd` into the  project folder, and run:
 
 ```
-docker compose up --build
+docker compose up -d --build
 ```
 This may take a few seconds to build.
 
@@ -153,11 +153,28 @@ be exposed to the internet directly.
    ```
    ```yaml
    # ~/.cloudflared/config.yml
-   tunnel: gifme
-   credentials-file: /root/.cloudflared/<tunnel-id>.json
+   # cloudflared tunnel config template
+   # Optimized for mid-size file transfers (10-100MB range): no chunked encoding,
+   # warm keepalive pool, relaxed timeouts. Replace the placeholders below.
+
+   tunnel: <TUNNEL_NAME>
+   credentials-file: /home/<USER>/.cloudflared/<TUNNEL_UUID>.json
+
+   originRequest:
+     connectTimeout: 10s
+     tcpKeepAlive: 30s
+     keepAliveConnections: 100
+     keepAliveTimeout: 90s
+     disableChunkedEncoding: true   # requires origin to send Content-Length
+     noHappyEyeballs: true          # safe to leave true for localhost origins
+     http2Origin: false
+
    ingress:
-     - hostname: gif.yourdomain.com
-       service: http://localhost:8000
+     - hostname: <SUBDOMAIN>.<DOMAIN>
+       service: http://localhost:<PORT>
+     # Add more hostname/service blocks here for additional services on this tunnel:
+     # - hostname: <OTHER_SUBDOMAIN>.<DOMAIN>
+     #   service: http://localhost:<OTHER_PORT>
      - service: http_status:404
    ```
 
