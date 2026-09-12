@@ -9,7 +9,13 @@ from PIL import Image
 
 from .errors import ToolError
 from .frames import save_gif
-from .runner import imagemagick_cmd, run
+from .parallel import pmap
+from .runner import ffmpeg_threads, imagemagick_cmd, magick_threads, run
+
+
+def _blend(args: tuple[Image.Image, Image.Image, int, int]) -> Image.Image:
+    a, b, s, steps = args
+    return Image.blend(a, b, s / (steps + 1))
 
 
 def crossfade(frames: list[Image.Image], delays: list[int], steps: int,
@@ -17,19 +23,30 @@ def crossfade(frames: list[Image.Image], delays: list[int], steps: int,
     """Insert blended frames between each pair - ezgif's 'crossfade frames'."""
     if steps < 1 or len(frames) < 2:
         return frames, delays
-    out_f: list[Image.Image] = []
-    out_d: list[int] = []
     size = frames[0].size
+    pairs = []
     for i, frame in enumerate(frames):
-        out_f.append(frame)
-        out_d.append(delays[i])
         nxt = frames[(i + 1) % len(frames)]
         a = frame.convert("RGBA")
         b = nxt.convert("RGBA")
         if b.size != size:
             b = b.resize(size)
-        for s in range(1, steps + 1):
-            out_f.append(Image.blend(a, b, s / (steps + 1)))
+        pairs.append((a, b))
+
+    # Every blend is independent of every other, so compute them all up
+    # front (in parallel) rather than one at a time inside the assembly loop.
+    blend_args = [(a, b, s, steps) for a, b in pairs for s in range(1, steps + 1)]
+    blends = pmap(_blend, blend_args)
+
+    out_f: list[Image.Image] = []
+    out_d: list[int] = []
+    idx = 0
+    for i, frame in enumerate(frames):
+        out_f.append(frame)
+        out_d.append(delays[i])
+        for _ in range(steps):
+            out_f.append(blends[idx])
+            idx += 1
             out_d.append(fade_delay_ms)
     return out_f, out_d
 
@@ -94,7 +111,7 @@ def build_gif(specs: list[dict], dst: str | Path, *, delay_ms: int = 100, loop: 
 def _build_imagemagick(frames, delays, dst, loop, dispose) -> None:
     work = Path(dst).parent / "_im_frames"
     work.mkdir(exist_ok=True)
-    cmd = imagemagick_cmd() + ["-loop", str(loop)]
+    cmd = imagemagick_cmd() + magick_threads() + ["-loop", str(loop)]
     if dispose:
         cmd += ["-dispose", "Background"]
     try:
@@ -118,10 +135,10 @@ def _build_ffmpeg(frames, delays, dst, loop) -> None:
         fps = max(1, round(1000 / max(10, sum(delays) / len(delays))))
         palette = work / "palette.png"
         pattern = str(work / "f%05d.png")
-        run(["ffmpeg", "-y", "-framerate", str(fps), "-i", pattern,
+        run(["ffmpeg", "-y", "-framerate", str(fps), "-i", pattern, *ffmpeg_threads(),
              "-vf", "palettegen", str(palette)])
         run(["ffmpeg", "-y", "-framerate", str(fps), "-i", pattern, "-i", str(palette),
-             "-lavfi", "paletteuse", "-loop", str(loop), str(dst)])
+             *ffmpeg_threads(), "-lavfi", "paletteuse", "-loop", str(loop), str(dst)])
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
@@ -140,8 +157,8 @@ def video_to_gif(src: str, dst: str, fps: int = 15, width: int | None = 480,
         trim += ["-ss", str(start)]
     if duration:
         trim += ["-t", str(duration)]
-    run(["ffmpeg", "-y", *trim, "-i", src, "-vf", f"{vf},palettegen", palette])
-    run(["ffmpeg", "-y", *trim, "-i", src, "-i", palette,
+    run(["ffmpeg", "-y", *trim, "-i", src, *ffmpeg_threads(), "-vf", f"{vf},palettegen", palette])
+    run(["ffmpeg", "-y", *trim, "-i", src, "-i", palette, *ffmpeg_threads(),
          "-lavfi", f"{vf} [x]; [x][1:v] paletteuse", dst])
     os.remove(palette)
 

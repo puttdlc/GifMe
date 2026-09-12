@@ -6,13 +6,15 @@ its timing goes through map_frames() instead.
 """
 from __future__ import annotations
 
+from itertools import repeat
 from pathlib import Path
 
 from PIL import Image, ImageSequence
 
 from .errors import ToolError
+from .parallel import pmap
 from .probe import kind_of
-from .runner import run
+from .runner import ffmpeg_threads, run
 
 DEFAULT_DELAY_MS = 100
 MIN_DELAY_MS = 10
@@ -63,6 +65,15 @@ def to_palette(img: Image.Image, palette: Image.Image | None, dither: bool,
     return p
 
 
+def convert_frames(frames: list[Image.Image], pal: Image.Image | None, dither: bool,
+                   transparent: bool) -> list[Image.Image]:
+    """to_palette() over every frame, parallelized across cores - this
+    quantize-and-dither pass is the actual CPU cost of any GIF write once
+    there are more than a handful of frames, and each frame is independent."""
+    n = len(frames)
+    return pmap(to_palette, frames, repeat(pal, n), repeat(dither, n), repeat(transparent, n))
+
+
 def save_gif(frames: list[Image.Image], delays: list[int], dst: str | Path,
              loop: int = 0, dispose: bool = False, use_global_palette: bool = True,
              dither: bool = True, optimize: bool = True,
@@ -88,7 +99,7 @@ def save_gif(frames: list[Image.Image], delays: list[int], dst: str | Path,
         f.getchannel("A").getextrema()[0] < 255 for f in frames)
     dispose = dispose or transparent
     pal = global_palette(frames) if use_global_palette else None
-    conv = [to_palette(f, pal, dither, transparent) for f in frames]
+    conv = convert_frames(frames, pal, dither, transparent)
     conv[0].save(
         dst,
         save_all=True,
@@ -135,4 +146,5 @@ def apply_edit(src: str | Path, dst: str | Path, pil_fn,
     else:
         if ff_filter is None:
             raise ToolError("this operation is not supported on video input")
-        run(["ffmpeg", "-y", "-i", str(src), "-vf", ff_filter, *(ff_extra or []), str(dst)])
+        run(["ffmpeg", "-y", "-i", str(src), *ffmpeg_threads(), "-vf", ff_filter,
+             *(ff_extra or []), str(dst)])

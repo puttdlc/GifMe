@@ -12,7 +12,7 @@ from .extract import extract_frames
 from .frames import load_frames, save_gif, save_still
 from .maker import video_to_gif
 from .probe import kind_of, pillow_readable
-from .runner import has, run
+from .runner import avif_threads, ffmpeg_threads, has, jxl_threads, run
 
 STILL_TARGETS = ("png", "jpg", "jpeg", "bmp", "tiff")
 
@@ -50,11 +50,13 @@ def _to_gif(src: str, dst: str, fps: int, preserve_transparency: bool = True) ->
 def _to_video(src: str, dst: str, target: str, quality: int) -> None:
     vf = "scale=trunc(iw/2)*2:trunc(ih/2)*2"  # h264 and vp9 both need even dimensions
     if target == "mp4":
-        run(["ffmpeg", "-y", "-i", src, "-vf", vf, "-movflags", "+faststart",
+        run(["ffmpeg", "-y", "-i", src, *ffmpeg_threads(), "-vf", vf, "-movflags", "+faststart",
              "-pix_fmt", "yuv420p", "-crf", str(_crf(quality)), dst])
     else:
-        run(["ffmpeg", "-y", "-i", src, "-vf", vf, "-pix_fmt", "yuv420p",
-             "-c:v", "libvpx-vp9", "-crf", str(_crf(quality)), "-b:v", "0", dst])
+        # libvpx-vp9 ignores -threads unless row-based multithreading is on
+        # too - without it, encoding stays single-core regardless of -threads.
+        run(["ffmpeg", "-y", "-i", src, *ffmpeg_threads(), "-vf", vf, "-pix_fmt", "yuv420p",
+             "-c:v", "libvpx-vp9", "-row-mt", "1", "-crf", str(_crf(quality)), "-b:v", "0", dst])
 
 
 def _to_animated(src: str, dst: str, fmt: str, quality: int = 90,
@@ -86,16 +88,18 @@ def _decode_video(src: str) -> tuple[list, list[int], int]:
 
 def _to_avif(src: str, dst: str, quality: int) -> None:
     if has("avifenc") and pillow_readable(src):
-        _via_png(src, dst, lambda tmp: ["avifenc", "-q", str(quality), tmp, dst])
+        _via_png(src, dst, lambda tmp: ["avifenc", "-q", str(quality), *avif_threads(), tmp, dst])
         return
-    run(["ffmpeg", "-y", "-i", src, "-c:v", "libaom-av1", "-crf", str(_crf(quality)),
-         "-still-picture", "1", dst])
+    # Same row-mt caveat as vp9: libaom-av1 needs it to actually spread
+    # across the threads -threads asks for.
+    run(["ffmpeg", "-y", "-i", src, *ffmpeg_threads(), "-c:v", "libaom-av1", "-row-mt", "1",
+         "-crf", str(_crf(quality)), "-still-picture", "1", dst])
 
 
 def _to_jxl(src: str, dst: str, quality: int) -> None:
     if not has("cjxl"):
         raise ToolError("JPEG XL support needs the 'cjxl' tool (libjxl-tools)")
-    _via_png(src, dst, lambda tmp: ["cjxl", "-q", str(quality), tmp, dst])
+    _via_png(src, dst, lambda tmp: ["cjxl", "-q", str(quality), *jxl_threads(), tmp, dst])
 
 
 def _via_png(src: str, dst: str, build_cmd) -> None:
@@ -116,7 +120,7 @@ def _to_still(src: str, dst: str, quality: int) -> None:
             save_still(im.convert("RGBA"), dst, quality=quality)
         return
     tmp = str(Path(dst).with_suffix(".frame.png"))
-    run(["ffmpeg", "-y", "-i", src, "-vframes", "1", tmp])
+    run(["ffmpeg", "-y", "-i", src, *ffmpeg_threads(), "-vframes", "1", tmp])
     try:
         with Image.open(tmp) as im:
             save_still(im.convert("RGBA"), dst, quality=quality)

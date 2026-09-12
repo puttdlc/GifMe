@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Callable, Iterator
 
 from .errors import ToolError
-from .frames import MIN_DELAY_MS, global_palette, load_frames, to_palette
+from .frames import MIN_DELAY_MS, convert_frames, global_palette, load_frames
 from .runner import has, run
 from .timing import drop_frames
 
@@ -19,7 +19,7 @@ def reduce_colors(src: str, dst: str, colors: int = 64, dither: bool = True,
     pal = global_palette(frames, colors=max(2, min(255, colors)))
     transparent = preserve_transparency and any(
         f.getchannel("A").getextrema()[0] < 255 for f in frames)
-    conv = [to_palette(f, pal, dither, transparent) for f in frames]
+    conv = convert_frames(frames, pal, dither, transparent)
     conv[0].save(dst, save_all=True, append_images=conv[1:],
                  duration=[max(MIN_DELAY_MS, d) for d in delays], loop=loop,
                  disposal=2 if transparent else 1,

@@ -6,10 +6,30 @@ import shutil
 import subprocess
 
 from .errors import ToolError
+from .parallel import cpu_count
 
 
 def has(binary: str) -> bool:
     return shutil.which(binary) is not None
+
+
+def ffmpeg_threads() -> list[str]:
+    """-threads, sized to what this process can actually run on - ffmpeg's
+    own autodetect only sees the host's core count, not a container's
+    --cpus quota, so left alone it can way over-thread inside one."""
+    return ["-threads", str(cpu_count())]
+
+
+def magick_threads() -> list[str]:
+    return ["-limit", "thread", str(cpu_count())]
+
+
+def avif_threads() -> list[str]:
+    return ["--jobs", str(cpu_count())]
+
+
+def jxl_threads() -> list[str]:
+    return ["--num_threads", str(cpu_count())]
 
 
 def _version(cmd: list[str]) -> str | None:
