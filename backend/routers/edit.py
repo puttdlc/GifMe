@@ -10,7 +10,7 @@ router = APIRouter(prefix="/api")
 
 
 @router.post("/resize")
-async def resize(file: UploadFile = File(None), job: str = Form(None), width: int = Form(0),
+def resize(file: UploadFile = File(None), job: str = Form(None), width: int = Form(0),
                  height: int = Form(0), percent: float = Form(0),
                  method: str = Form("lanczos"), keep_aspect: bool = Form(True),
                  preserve_transparency: bool = Form(True)):
@@ -23,7 +23,7 @@ async def resize(file: UploadFile = File(None), job: str = Form(None), width: in
 
 
 @router.post("/crop")
-async def crop(file: UploadFile = File(None), job: str = Form(None), x: int = Form(0),
+def crop(file: UploadFile = File(None), job: str = Form(None), x: int = Form(0),
                y: int = Form(0), w: int = Form(...), h: int = Form(...),
                preserve_transparency: bool = Form(True)):
     d, src = resolve(job, file)
@@ -34,7 +34,7 @@ async def crop(file: UploadFile = File(None), job: str = Form(None), x: int = Fo
 
 
 @router.post("/rotate")
-async def rotate(file: UploadFile = File(None), job: str = Form(None),
+def rotate(file: UploadFile = File(None), job: str = Form(None),
                  degrees: float = Form(...), background: str = Form("#00000000"),
                  preserve_transparency: bool = Form(True)):
     d, src = resolve(job, file)
@@ -45,7 +45,7 @@ async def rotate(file: UploadFile = File(None), job: str = Form(None),
 
 
 @router.post("/flip")
-async def flip(file: UploadFile = File(None), job: str = Form(None), axis: str = Form(...),
+def flip(file: UploadFile = File(None), job: str = Form(None), axis: str = Form(...),
                preserve_transparency: bool = Form(True)):
     d, src = resolve(job, file)
     out = out_path(d, suffix_of(src))
@@ -54,7 +54,7 @@ async def flip(file: UploadFile = File(None), job: str = Form(None), axis: str =
 
 
 @router.post("/speed")
-async def speed(file: UploadFile = File(None), job: str = Form(None), factor: float = Form(0),
+def speed(file: UploadFile = File(None), job: str = Form(None), factor: float = Form(0),
                 delay_ms: int = Form(0), fps: float = Form(0),
                 preserve_transparency: bool = Form(True)):
     d, src = resolve(job, file)
@@ -69,7 +69,7 @@ async def speed(file: UploadFile = File(None), job: str = Form(None), factor: fl
 
 
 @router.post("/reverse")
-async def reverse(file: UploadFile = File(None), job: str = Form(None),
+def reverse(file: UploadFile = File(None), job: str = Form(None),
                   preserve_transparency: bool = Form(True)):
     d, src = resolve(job, file)
     out = out_path(d, suffix_of(src))
@@ -78,7 +78,7 @@ async def reverse(file: UploadFile = File(None), job: str = Form(None),
 
 
 @router.post("/loop")
-async def loop_count(file: UploadFile = File(None), job: str = Form(None),
+def loop_count(file: UploadFile = File(None), job: str = Form(None),
                      loop: int = Form(0), preserve_transparency: bool = Form(True)):
     d, src = resolve(job, file)
     out = out_path(d, ".gif")
@@ -87,7 +87,7 @@ async def loop_count(file: UploadFile = File(None), job: str = Form(None),
 
 
 @router.post("/cut")
-async def cut(file: UploadFile = File(None), job: str = Form(None), start: float = Form(0),
+def cut(file: UploadFile = File(None), job: str = Form(None), start: float = Form(0),
               end: float = Form(0), start_frame: int = Form(0), end_frame: int = Form(0),
               preserve_transparency: bool = Form(True)):
     d, src = resolve(job, file)

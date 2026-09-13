@@ -49,7 +49,7 @@ def serve_file(job: str, name: str):
 
 
 @router.post("/upload")
-async def upload(file: UploadFile = File(...), job: str = Form(None)):
+def upload(file: UploadFile = File(...), job: str = Form(None)):
     d, src = resolve(job, file)
     return {
         "job": d.name,
@@ -61,7 +61,7 @@ async def upload(file: UploadFile = File(...), job: str = Form(None)):
 
 
 @router.post("/analyze")
-async def analyze(file: UploadFile = File(None), job: str = Form(None)):
+def analyze(file: UploadFile = File(None), job: str = Form(None)):
     _d, src = resolve(job, file)
     return JSONResponse(guard(gifme.analyze, str(src), True))
 
@@ -88,7 +88,7 @@ def workdir_latest():
 
 
 @router.post("/set-input")
-async def set_input(job: str = Form(...), name: str = Form(...)):
+def set_input(job: str = Form(...), name: str = Form(...)):
     """Adopt a tool's output as the job's working file, so later tools build on it."""
     d = job_dir(job)
     p = (d / name).resolve()
@@ -105,7 +105,7 @@ async def set_input(job: str = Form(...), name: str = Form(...)):
 
 
 @router.post("/reset")
-async def reset(job: str = Form(...)):
+def reset(job: str = Form(...)):
     """Go back to the file as it was uploaded."""
     d = job_dir(job)
     state = read_state(d)

@@ -10,7 +10,7 @@ router = APIRouter(prefix="/api")
 
 
 @router.post("/effect")
-async def effect(file: UploadFile = File(None), job: str = Form(None),
+def effect(file: UploadFile = File(None), job: str = Form(None),
                  name: str = Form("none"), brightness: float = Form(100),
                  contrast: float = Form(100), saturation: float = Form(100),
                  hue: float = Form(0), blur: float = Form(0), sharpen: float = Form(0),
@@ -31,7 +31,7 @@ async def effect(file: UploadFile = File(None), job: str = Form(None),
 
 
 @router.post("/text")
-async def text(file: UploadFile = File(None), job: str = Form(None), text: str = Form(...),
+def text(file: UploadFile = File(None), job: str = Form(None), text: str = Form(...),
                position: str = Form("bottom"), font_size: int = Form(28),
                color: str = Form("#ffffff"), stroke_color: str = Form("#000000"),
                stroke_width: int = Form(2), box: bool = Form(False),
@@ -51,7 +51,7 @@ async def text(file: UploadFile = File(None), job: str = Form(None), text: str =
 
 
 @router.post("/censor")
-async def censor(file: UploadFile = File(None), job: str = Form(None), x: int = Form(0),
+def censor(file: UploadFile = File(None), job: str = Form(None), x: int = Form(0),
                  y: int = Form(0), w: int = Form(...), h: int = Form(...),
                  mode: str = Form("blur"), strength: int = Form(12),
                  preserve_transparency: bool = Form(True)):
@@ -63,7 +63,7 @@ async def censor(file: UploadFile = File(None), job: str = Form(None), x: int = 
 
 
 @router.post("/overlay")
-async def overlay(overlay_file: UploadFile = File(...), file: UploadFile = File(None),
+def overlay(overlay_file: UploadFile = File(...), file: UploadFile = File(None),
                   job: str = Form(None), x: int = Form(0), y: int = Form(0),
                   scale: float = Form(100), opacity: float = Form(100),
                   position: str = Form(""), preserve_transparency: bool = Form(True)):

@@ -29,7 +29,7 @@ async def optimize_auto_stop(run_id: str = Form(...)):
 
 
 @router.post("/optimize")
-async def optimize(file: UploadFile = File(None), job: str = Form(None),
+def optimize(file: UploadFile = File(None), job: str = Form(None),
                    method: str = Form("lossy"), lossy: int = Form(0), colors: int = Form(0),
                    level: int = Form(3), drop_every: int = Form(0),
                    dither: bool = Form(True), preserve_transparency: bool = Form(True)):
@@ -113,7 +113,7 @@ async def optimize_auto(file: UploadFile = File(None), job: str = Form(None),
 
 
 @router.post("/convert")
-async def convert(file: UploadFile = File(None), job: str = Form(None),
+def convert(file: UploadFile = File(None), job: str = Form(None),
                   target: str = Form(...), quality: int = Form(90), fps: int = Form(15),
                   lossless: bool = Form(False), preserve_transparency: bool = Form(True)):
     d, src = resolve(job, file)
@@ -124,7 +124,7 @@ async def convert(file: UploadFile = File(None), job: str = Form(None),
 
 
 @router.post("/sprite")
-async def sprite(file: UploadFile = File(None), job: str = Form(None), columns: int = Form(0),
+def sprite(file: UploadFile = File(None), job: str = Form(None), columns: int = Form(0),
                  padding: int = Form(0), background: str = Form("#00000000")):
     d, src = resolve(job, file)
     out = out_path(d, ".png", stem="sprite")
@@ -134,7 +134,7 @@ async def sprite(file: UploadFile = File(None), job: str = Form(None), columns: 
 
 
 @router.post("/split")
-async def split(file: UploadFile = File(None), job: str = Form(None), fmt: str = Form("png")):
+def split(file: UploadFile = File(None), job: str = Form(None), fmt: str = Form("png")):
     """Explode into frames, show them all, and zip the lot."""
     d, src = resolve(job, file)
     out_dir = d / f"split_{uuid.uuid4().hex[:6]}"
@@ -154,7 +154,7 @@ async def split(file: UploadFile = File(None), job: str = Form(None), fmt: str =
 
 
 @router.post("/split-frames")
-async def split_frames_zip(file: UploadFile = File(...)):
+def split_frames_zip(file: UploadFile = File(...)):
     """Legacy endpoint: straight to a zip download."""
     d = new_job()
     src = save_upload(file, d)

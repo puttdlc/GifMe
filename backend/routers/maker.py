@@ -84,7 +84,7 @@ def _from_animation(staging: Path, frames_dir: Path, idx: int) -> list[dict]:
 
 
 @router.post("/frames/load")
-async def frames_load(files: list[UploadFile] = File(...), job: str = Form(None),
+def frames_load(files: list[UploadFile] = File(...), job: str = Form(None),
                       sort: str = Form("name")):
     """Start (or extend) a frame set from images, a zip, a GIF or a video."""
     d = job_dir(job) if job else new_job()
@@ -107,12 +107,12 @@ async def frames_load(files: list[UploadFile] = File(...), job: str = Form(None)
 
 
 @router.post("/frames/list")
-async def frames_list(job: str = Form(...)):
+def frames_list(job: str = Form(...)):
     return {"job": job, "frames": read_state(job_dir(job)).get("frames", [])}
 
 
 @router.post("/gif/build")
-async def gif_build(job: str = Form(...), payload: str = Form(...)):
+def gif_build(job: str = Form(...), payload: str = Form(...)):
     """Assemble the frame editor's current state into a GIF."""
     d = job_dir(job)
     opts = json.loads(payload)
@@ -146,7 +146,7 @@ async def gif_build(job: str = Form(...), payload: str = Form(...)):
 
 
 @router.post("/video-to-gif")
-async def video_to_gif(file: UploadFile = File(None), job: str = Form(None),
+def video_to_gif(file: UploadFile = File(None), job: str = Form(None),
                        fps: int = Form(15), width: int = Form(480), height: int = Form(0),
                        start: float = Form(0.0), end: float = Form(0),
                        duration: float = Form(0)):
@@ -158,7 +158,7 @@ async def video_to_gif(file: UploadFile = File(None), job: str = Form(None),
 
 
 @router.post("/images-to-gif")
-async def images_to_gif(files: list[UploadFile] = File(...), delay_ms: int = Form(100),
+def images_to_gif(files: list[UploadFile] = File(...), delay_ms: int = Form(100),
                         width: int = Form(0)):
     """One-shot path with no frame editing, kept for scripted use."""
     d = new_job()
