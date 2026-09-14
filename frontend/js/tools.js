@@ -419,12 +419,25 @@ function renderAnalysis(info) {
     ['Loop', info.loop === 0 ? 'forever' : (info.loop ?? '-')],
     ['Transparency', info.transparency ? 'yes' : 'no'],
     ['Colour mode', info.mode || info.codec || '-'],
+    ['Colours', info.colors ? `${info.colors} / 256` : undefined],
     ['File size', bytes(info.size_bytes)],
   ].filter(([, v]) => v !== undefined && v !== null);
 
   const table = el('table', { class: 'facts' });
   rows.forEach(([k, v]) => table.append(el('tr', {}, el('th', {}, k), el('td', {}, String(v)))));
   out.append(table);
+
+  if (info.color_tables) {
+    const ct = info.color_tables;
+    const ctRows = [
+      ['Global colour table', ct.global.present ? `${ct.global.colors} colours` : 'none'],
+      ['Frames with a local colour table', `${ct.local_frame_count} of ${info.nb_frames ?? '-'}`],
+      ['Largest local colour table', ct.local_colors_max ? `${ct.local_colors_max} colours` : '-'],
+    ];
+    const ctTable = el('table', { class: 'facts' });
+    ctRows.forEach(([k, v]) => ctTable.append(el('tr', {}, el('th', {}, k), el('td', {}, String(v)))));
+    out.append(el('h4', {}, 'Local Colour Tables'), ctTable);
+  }
 
   if (info.frames?.length) {
     const ft = el('table', { class: 'facts frames' },

@@ -112,6 +112,7 @@ function factLine(meta, size) {
   if (meta.nb_frames > 1) bits.push(`${meta.nb_frames} frames`);
   if (meta.duration_s) bits.push(`${meta.duration_s}s`);
   if (meta.fps) bits.push(`${meta.fps} fps`);
+  if (meta.colors) bits.push(`${meta.colors} colors`);
   bits.push(bytes(meta.size_bytes ?? size));
   return bits.join(' · ');
 }
@@ -154,6 +155,7 @@ export function showResult(result, label = 'Done', opts = {}) {
   const notes = [];
   if (result.meta?.width) notes.push(`${result.meta.width}×${result.meta.height}`);
   if (result.meta?.nb_frames > 1) notes.push(`${result.meta.nb_frames} frames`);
+  if (result.meta?.colors) notes.push(`${result.meta.colors} colors`);
   notes.push(bytes(result.size_bytes));
   if (result.frame_count) notes.push(`${result.frame_count} frames used`);
 
