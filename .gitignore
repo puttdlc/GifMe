@@ -5,3 +5,4 @@ __pycache__/
 .env
 backend/workdir/*
 !backend/workdir/.gitkeep
+cloudflared.deb

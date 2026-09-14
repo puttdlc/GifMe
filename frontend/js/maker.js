@@ -26,6 +26,18 @@ export function initMaker() {
   }));
   $('#maker-drop').addEventListener('drop', e => loadFrames(e.dataTransfer.files));
 
+  const makerUrlInput = $('#maker-url');
+  const loadMakerUrl = async () => {
+    const url = makerUrlInput.value.trim();
+    if (!url) return;
+    const r = await loadFramesFromUrl(url);
+    if (r) makerUrlInput.value = '';
+  };
+  $('#maker-url-load').addEventListener('click', loadMakerUrl);
+  makerUrlInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); loadMakerUrl(); }
+  });
+
   $('#maker-load-current').addEventListener('click', loadCurrentInput);
   subscribe(() => { $('#maker-load-current').disabled = !hasFile(); });
 
@@ -64,23 +76,35 @@ export function initMaker() {
 
 const byName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true });
 
+// Append only what is new, so local edits - copies, reordering, skips - are
+// not thrown away by a second upload.
+function applyLoadedFrames(r) {
+  job = r.job;
+  const added = r.frames.slice(serverCount);
+  serverCount = r.frames.length;
+  const startingFresh = frames.length === 0;
+  seedDelays(added, startingFresh);
+  frames = startingFresh ? r.frames.slice() : frames.concat(added);
+  renumber();
+  toast(`${added.length} frames added`);
+}
+
 async function loadFrames(fileList, input) {
   if (!fileList?.length) return;
   await withBusy($('#maker-add'), async () => {
     const r = await post('/api/frames/load', { job: job || '', sort: 'name' },
                          { files: fileList });
-    job = r.job;
-    // Append only what is new, so local edits - copies, reordering, skips -
-    // are not thrown away by a second upload.
-    const added = r.frames.slice(serverCount);
-    serverCount = r.frames.length;
-    const startingFresh = frames.length === 0;
-    seedDelays(added, startingFresh);
-    frames = startingFresh ? r.frames.slice() : frames.concat(added);
-    renumber();
-    toast(`${added.length} frames added`);
+    applyLoadedFrames(r);
   });
   if (input) input.value = '';
+}
+
+async function loadFramesFromUrl(url) {
+  return withBusy($('#maker-url-load'), async () => {
+    const r = await post('/api/frames/load-url', { job: job || '', sort: 'name', url });
+    applyLoadedFrames(r);
+    return r;
+  });
 }
 
 // Still images take their delay from the GIF options field; frames pulled out

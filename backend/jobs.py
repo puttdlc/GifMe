@@ -7,14 +7,20 @@ keeps a file around between tools.
 """
 from __future__ import annotations
 
+import ipaddress
 import json
+import mimetypes
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 import uuid
 from pathlib import Path
+from urllib.parse import urlparse
 
 from fastapi import HTTPException, UploadFile
 from fastapi.responses import JSONResponse
@@ -90,6 +96,103 @@ def save_upload(upload: UploadFile, d: Path) -> Path:
     except HTTPException:
         dest.unlink(missing_ok=True)
         raise
+    return dest
+
+
+_URL_TIMEOUT_S = float(os.environ.get("GIFME_URL_TIMEOUT_S", "20") or "20")
+
+
+def _is_public_host(host: str) -> bool:
+    """Reject hostnames that resolve to a private/loopback/link-local address,
+    so "paste a link" can't be used to make the server fetch its own admin
+    endpoints or probe the internal network it's running on - relevant since
+    (unlike the rest of this "local" tool) a pasted URL is fetched
+    server-side, and this app is sometimes tunnelled out to the internet."""
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except (socket.gaierror, UnicodeError):
+        return False
+    for info in infos:
+        raw_ip = info[4][0].split("%")[0]  # strip an IPv6 zone id, if any
+        ip = ipaddress.ip_address(raw_ip)
+        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+            ip = ip.ipv4_mapped
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved \
+                or ip.is_multicast or ip.is_unspecified:
+            return False
+    return True
+
+
+def _validate_url(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(400, "only http:// or https:// URLs are supported")
+    if not parsed.hostname:
+        raise HTTPException(400, "that doesn't look like a valid URL")
+    if not _is_public_host(parsed.hostname):
+        raise HTTPException(400, "that URL points to a private/internal address, which isn't allowed")
+
+
+class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Re-validate every hop, so a redirect can't be used to smuggle the
+    fetch to a private address after the first, allowed URL passed."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        _validate_url(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_url_opener = urllib.request.build_opener(_SafeRedirectHandler)
+
+
+def _filename_from_response(url: str, resp) -> str:
+    cd = resp.headers.get("Content-Disposition", "") or ""
+    if "filename=" in cd:
+        name = cd.split("filename=")[-1].split(";")[0].strip().strip('"').strip("'")
+        if name:
+            return safe_name(name)
+    name = Path(urlparse(url).path).name
+    if name:
+        return safe_name(name)
+    ctype = (resp.headers.get("Content-Type") or "").split(";")[0].strip()
+    return safe_name(f"download{mimetypes.guess_extension(ctype) or ''}")
+
+
+def download_url(url: str, d: Path) -> Path:
+    """Fetch a remote file into the job dir - the "paste a link" counterpart
+    to save_upload, with the same size cap and a server-side SSRF guard
+    since (unlike a browser upload) this fetch runs on the server's own
+    network."""
+    _validate_url(url)
+    req = urllib.request.Request(url, headers={"User-Agent": "GifMe/1.0"})
+    try:
+        resp = _url_opener.open(req, timeout=_URL_TIMEOUT_S)
+    except urllib.error.HTTPError as e:
+        raise HTTPException(400, f"couldn't fetch that URL ({e.code} {e.reason})")
+    except (urllib.error.URLError, OSError) as e:
+        raise HTTPException(400, f"couldn't fetch that URL: {getattr(e, 'reason', e)}")
+
+    with resp:
+        dest = d / _filename_from_response(resp.geturl() or url, resp)
+        if dest.exists():
+            dest = d / f"{dest.stem}_{uuid.uuid4().hex[:4]}{dest.suffix}"
+        written = 0
+        try:
+            with dest.open("wb") as f:
+                while chunk := resp.read(_UPLOAD_CHUNK):
+                    written += len(chunk)
+                    if MAX_UPLOAD_BYTES and written > MAX_UPLOAD_BYTES:
+                        raise HTTPException(
+                            413,
+                            f"file exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)} MB upload limit",
+                        )
+                    f.write(chunk)
+        except HTTPException:
+            dest.unlink(missing_ok=True)
+            raise
+        if written == 0:
+            dest.unlink(missing_ok=True)
+            raise HTTPException(400, "that URL returned no data")
     return dest
 
 

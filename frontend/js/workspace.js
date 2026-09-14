@@ -34,6 +34,18 @@ export function initWorkspace() {
     if (f) upload(f);
   });
 
+  const urlInput = $('#ws-url');
+  const loadUrl = async () => {
+    const url = urlInput.value.trim();
+    if (!url) return;
+    const r = await uploadFromUrl(url);
+    if (r) urlInput.value = '';
+  };
+  $('#ws-url-load').addEventListener('click', loadUrl);
+  urlInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); loadUrl(); }
+  });
+
   $('#ws-reset').addEventListener('click', async (e) => {
     if (!state.job) return;
     await withBusy(e.target, async () => {
@@ -62,6 +74,16 @@ export async function upload(file) {
     const r = await post('/api/upload', {}, { file });
     setCurrent(r);
     showResult(r, 'Uploaded');
+    return r;
+  });
+}
+
+export async function uploadFromUrl(url) {
+  const btn = $('#ws-url-load');
+  return withBusy(btn, async () => {
+    const r = await post('/api/upload-url', { url });
+    setCurrent(r);
+    showResult(r, 'Loaded from URL');
     return r;
   });
 }

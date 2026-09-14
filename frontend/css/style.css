@@ -130,6 +130,11 @@ h4 { margin: 18px 0 6px; }
 .link { color: var(--accent); cursor: pointer; text-decoration: underline; }
 .tab-hidden { display: none; }
 
+.url-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.url-row .hint { margin: 0; white-space: nowrap; }
+.url-row input[type=url] { flex: 1; margin-top: 0; min-width: 160px; }
+.url-row button { margin-top: 0; white-space: nowrap; }
+
 /* ---------- forms ---------- */
 
 .hint { color: var(--muted); font-size: 12.5px; margin: 6px 0; }
@@ -164,7 +169,7 @@ label.check .hint { margin: 0; }
 }
 .sub label { margin: 4px 0; }
 
-input[type=number], input[type=text], input[type=color], select, textarea {
+input[type=number], input[type=text], input[type=url], input[type=color], select, textarea {
   display: block; width: 100%; margin-top: 4px; padding: 7px 8px;
   background: var(--bg-sunken); border: 1px solid var(--border);
   border-radius: 6px; color: var(--text); font-size: 13px; font-family: inherit;

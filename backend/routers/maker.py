@@ -10,7 +10,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 import gifme
-from jobs import (IMAGE_SUFFIXES, guard, job_dir, new_job, out_path, read_state,
+from jobs import (IMAGE_SUFFIXES, download_url, guard, job_dir, new_job, out_path, read_state,
                   resolve, result, safe_name, save_upload, write_state)
 
 router = APIRouter(prefix="/api")
@@ -25,6 +25,19 @@ def _decorate(d: Path, frames: list[dict]) -> list[dict]:
     return frames
 
 
+def _ingest(staging: Path, frames_dir: Path, idx: int) -> list[dict]:
+    """Turn one already-fetched file into frame(s) - loose image, a zip of
+    images, or an animation/video to explode."""
+    suffix = staging.suffix.lower()
+    if suffix == ".zip":
+        return _from_zip(staging, frames_dir, idx)
+    if gifme.kind_of(staging) in ("gif", "animation", "video"):
+        return _from_animation(staging, frames_dir, idx)
+    dest = frames_dir / f"{idx:04d}{suffix or '.png'}"
+    shutil.move(str(staging), dest)
+    return [{"index": idx, "name": dest.name, "delay_ms": gifme.DEFAULT_DELAY_MS, "still": True}]
+
+
 def _collect(files: list[UploadFile], frames_dir: Path, start_index: int) -> list[dict]:
     """Accept loose images, a zip of images, or an animation/video to explode."""
     frames_dir.mkdir(parents=True, exist_ok=True)
@@ -37,20 +50,28 @@ def _collect(files: list[UploadFile], frames_dir: Path, start_index: int) -> lis
         with staging.open("wb") as fh:
             shutil.copyfileobj(up.file, fh)
         try:
-            if suffix == ".zip":
-                out += _from_zip(staging, frames_dir, idx)
-            elif gifme.kind_of(staging) in ("gif", "animation", "video"):
-                out += _from_animation(staging, frames_dir, idx)
-            else:
-                dest = frames_dir / f"{idx:04d}{suffix or '.png'}"
-                shutil.move(str(staging), dest)
-                out.append({"index": idx, "name": dest.name,
-                            "delay_ms": gifme.DEFAULT_DELAY_MS, "still": True})
+            out += _ingest(staging, frames_dir, idx)
             idx = start_index + len(out)
         finally:
             if staging.exists():
                 staging.unlink()
     return out
+
+
+def _collect_url(url: str, frames_dir: Path, start_index: int) -> list[dict]:
+    """Same as _collect, but the one file comes from a pasted link instead
+    of a browser upload - download_url already applies the SSRF guard and
+    upload size cap."""
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    scratch = frames_dir.parent
+    fetched = download_url(url, scratch)
+    staging = scratch / f"_in_{uuid.uuid4().hex[:6]}{fetched.suffix.lower()}"
+    fetched.rename(staging)
+    try:
+        return _ingest(staging, frames_dir, start_index)
+    finally:
+        if staging.exists():
+            staging.unlink()
 
 
 def _from_zip(staging: Path, frames_dir: Path, idx: int) -> list[dict]:
@@ -83,15 +104,9 @@ def _from_animation(staging: Path, frames_dir: Path, idx: int) -> list[dict]:
     return out
 
 
-@router.post("/frames/load")
-def frames_load(files: list[UploadFile] = File(...), job: str = Form(None),
-                      sort: str = Form("name")):
-    """Start (or extend) a frame set from images, a zip, a GIF or a video."""
-    d = job_dir(job) if job else new_job()
-    existing = read_state(d).get("frames", [])
-    new = guard(_collect, files, d / "frames", len(existing) + 1)
+def _finish_load(d: Path, existing: list[dict], new: list[dict], sort: str) -> dict:
     if not new:
-        raise HTTPException(400, "no usable images found in that upload")
+        raise HTTPException(400, "no usable images found")
     _decorate(d, new)
 
     frames = existing + new
@@ -104,6 +119,28 @@ def frames_load(files: list[UploadFile] = File(...), job: str = Form(None),
     state["frames"] = frames
     write_state(d, state)
     return {"job": d.name, "frames": frames}
+
+
+@router.post("/frames/load")
+def frames_load(files: list[UploadFile] = File(...), job: str = Form(None),
+                      sort: str = Form("name")):
+    """Start (or extend) a frame set from images, a zip, a GIF or a video."""
+    d = job_dir(job) if job else new_job()
+    existing = read_state(d).get("frames", [])
+    new = guard(_collect, files, d / "frames", len(existing) + 1)
+    return _finish_load(d, existing, new, sort)
+
+
+@router.post("/frames/load-url")
+def frames_load_url(url: str = Form(...), job: str = Form(None), sort: str = Form("name")):
+    """Same as /frames/load, but for a pasted link instead of a file picker."""
+    url = url.strip()
+    if not url:
+        raise HTTPException(400, "please paste a URL first")
+    d = job_dir(job) if job else new_job()
+    existing = read_state(d).get("frames", [])
+    new = guard(_collect_url, url, d / "frames", len(existing) + 1)
+    return _finish_load(d, existing, new, sort)
 
 
 @router.post("/frames/list")

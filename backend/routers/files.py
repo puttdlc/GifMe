@@ -7,8 +7,9 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
 import gifme
-from jobs import (clear_workdir, file_url, guard, job_dir, latest_current_file, open_workdir,
-                  read_state, resolve, set_current, workdir_stats, write_state)
+from jobs import (clear_workdir, download_url, file_url, guard, job_dir, latest_current_file,
+                  new_job, open_workdir, read_state, resolve, set_current, workdir_stats,
+                  write_state)
 
 router = APIRouter(prefix="/api")
 
@@ -51,6 +52,25 @@ def serve_file(job: str, name: str):
 @router.post("/upload")
 def upload(file: UploadFile = File(...), job: str = Form(None)):
     d, src = resolve(job, file)
+    return {
+        "job": d.name,
+        "name": src.name,
+        "url": file_url(d, src.name),
+        "size_bytes": src.stat().st_size,
+        "meta": guard(gifme.analyze, str(src), True),
+    }
+
+
+@router.post("/upload-url")
+def upload_url(url: str = Form(...), job: str = Form(None)):
+    """Fetch a remote file (a link to a GIF/image/video) and treat it as the
+    upload - the "paste a link" counterpart to /upload."""
+    url = url.strip()
+    if not url:
+        raise HTTPException(400, "please paste a URL first")
+    d = job_dir(job) if job else new_job()
+    src = guard(download_url, url, d)
+    set_current(d, src.name)
     return {
         "job": d.name,
         "name": src.name,
