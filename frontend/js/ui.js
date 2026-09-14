@@ -65,3 +65,41 @@ export function initSliders(root = document) {
     sync();
   });
 }
+
+const CHEV_SVG = '<svg class="chev" viewBox="0 0 20 20" width="12" height="12" fill="none" '
+  + 'stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">'
+  + '<path d="M5 8l5 5 5-5"/></svg>';
+
+// Every <fieldset><legend> in the app becomes a click-to-collapse section:
+// the legend turns into a toggle button (chevron + its original label) and
+// everything else inside the fieldset moves into an animated body wrapper.
+// Cuts down on scrolling for the long option panels, especially on phones.
+export function initCollapsibleFieldsets(root = document) {
+  root.querySelectorAll('fieldset').forEach(fs => {
+    if (fs.classList.contains('collapsible-ready')) return;
+    const legend = fs.querySelector(':scope > legend');
+    if (!legend) return;
+
+    const label = legend.textContent;
+    const toggle = el('button', { type: 'button', class: 'fieldset-toggle', 'aria-expanded': 'true' });
+    toggle.innerHTML = CHEV_SVG;
+    toggle.append(document.createTextNode(` ${label}`));
+    legend.textContent = '';
+    legend.append(toggle);
+
+    // data-keep-visible opts a child out of being tucked into the collapsing
+    // wrapper - needed for #range-panel's absolutely-positioned pin toggle,
+    // which would otherwise get clipped by the wrapper's overflow:hidden.
+    const inner = el('div', { class: 'fieldset-body-inner' });
+    Array.from(fs.children).forEach(node => {
+      if (node !== legend && !node.hasAttribute('data-keep-visible')) inner.append(node);
+    });
+    fs.append(el('div', { class: 'fieldset-body' }, inner));
+
+    fs.classList.add('collapsible-ready');
+    toggle.addEventListener('click', () => {
+      const collapsed = fs.classList.toggle('collapsed');
+      toggle.setAttribute('aria-expanded', String(!collapsed));
+    });
+  });
+}

@@ -29,8 +29,10 @@ body {
 
 header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   padding: 14px 24px;
   border-bottom: 1px solid var(--border);
 }
@@ -47,8 +49,8 @@ header h1 { font-size: 19px; margin: 0; }
   border: 1px solid var(--border); padding: 2px 8px;
   border-radius: 999px; margin-left: 6px; vertical-align: middle;
 }
-.header-right { display: flex; align-items: center; gap: 14px; }
-#workdir-wrap { display: flex; align-items: center; gap: 8px; }
+.header-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+#workdir-wrap { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 #workdir-stats { font-size: 12px; color: var(--muted); white-space: nowrap; }
 #workdir-open, #workdir-clear { margin: 0; padding: 5px 12px; font-size: 12px; }
 #workdir-clear { padding: 5px 9px; line-height: 1; }
@@ -95,6 +97,7 @@ header h1 { font-size: 19px; margin: 0; }
 #tabs button {
   background: transparent; border: 1px solid transparent; color: var(--muted);
   padding: 7px 13px; border-radius: 6px; cursor: pointer; font-size: 13px; margin: 0;
+  flex: none;
 }
 #tabs button:hover { color: var(--text); background: #2b3341; }
 #tabs button.active { background: var(--accent-strong); color: #fff; }
@@ -109,10 +112,11 @@ h4 { margin: 18px 0 6px; }
 
 #workspace {
   position: sticky; top: 47px; z-index: 20;
-  display: flex; align-items: center; gap: 14px;
+  display: flex; flex-direction: column; gap: 10px;
   max-width: 1000px; margin: 14px auto 0; padding: 10px 14px;
   background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px;
 }
+.ws-row { display: flex; align-items: center; gap: 14px; }
 #ws-thumb img, #ws-thumb video {
   width: 168px; height: 168px; object-fit: contain;
   background: var(--bg-sunken); border-radius: 6px;
@@ -125,9 +129,43 @@ h4 { margin: 18px 0 6px; }
 #ws-thumb.fresh img, #ws-thumb.fresh video {
   outline-color: var(--fresh-ring); background-color: var(--fresh-bg);
 }
+/* The thumbnail's outline bleeds 5px past its box (3px width + 2px offset) -
+   this padding/negative-margin pair gives that room to breathe without
+   nudging surrounding layout, and without clipping it once collapse below
+   adds overflow:hidden. */
+#ws-thumb {
+  padding: 6px; margin: -6px;
+  max-height: 180px; opacity: 1; overflow: hidden;
+  transition: max-height .22s ease, opacity .18s ease,
+    padding-top .22s ease, padding-bottom .22s ease;
+}
 .ws-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .ws-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ws-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.ws-actions {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  padding: 4px; margin: -4px;
+  max-height: 120px; opacity: 1; overflow: hidden;
+  transition: max-height .22s ease, opacity .18s ease,
+    padding-top .22s ease, padding-bottom .22s ease;
+}
+/* Collapsing hides the thumbnail and action row, leaving the name/facts
+   plus the toggle bar below - same idea as the fieldsets, for panels (like
+   Video to GIF) that have no fieldset of their own. A full-width bar
+   rather than a small inline icon, since a thumb-sized hit target is easy
+   to miss on a phone. */
+#workspace.collapsed #ws-thumb {
+  max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0;
+}
+#workspace.collapsed .ws-actions {
+  max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0;
+}
+.ws-toggle {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; margin-top: 0; padding: 12px 14px; font-size: 13px;
+  min-height: 44px;
+}
+.ws-toggle .chev { transition: transform .22s ease; flex: none; }
+#workspace.collapsed .ws-toggle .chev { transform: rotate(-90deg); }
 
 #ws-empty { max-width: 1000px; margin: 14px auto 0; padding: 0 24px; }
 .dropzone {
@@ -156,6 +194,28 @@ fieldset {
   position: relative;
 }
 legend { padding: 0 6px; color: var(--text); font-size: 14px; }
+
+/* click-to-collapse fieldsets (see ui.js initCollapsibleFieldsets) */
+.fieldset-toggle {
+  all: unset; display: inline-flex; align-items: center; gap: 6px;
+  color: var(--text); font-size: 14px; cursor: pointer;
+  padding: 4px 2px; margin: -4px -2px; border-radius: 4px;
+  background: transparent;
+}
+/* explicit background here beats the generic button:hover rule, whose
+   type+pseudo selector otherwise outranks this lone class in specificity */
+.fieldset-toggle:hover { color: var(--accent); background: transparent; }
+.fieldset-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fieldset-toggle .chev { flex: none; transition: transform .22s ease; }
+fieldset.collapsed .fieldset-toggle .chev { transform: rotate(-90deg); }
+
+.fieldset-body {
+  display: grid; grid-template-rows: 1fr;
+  transition: grid-template-rows .22s ease;
+}
+.fieldset-body-inner { overflow: hidden; }
+fieldset.collapsed .fieldset-body { grid-template-rows: 0fr; }
+fieldset:not(.collapsed) .fieldset-body-inner { padding-top: 8px; }
 
 label { display: block; margin: 8px 0; font-size: 13px; color: var(--muted); }
 label.check, label.pin {
@@ -407,7 +467,61 @@ table.facts.frames td { font-variant-numeric: tabular-nums; }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 #toast.error { border-color: var(--danger); color: #ffb3ad; }
 
+/* ---------- responsive: tablet ---------- */
+
+@media (max-width: 900px) {
+  main, #result, #ws-empty { max-width: 100%; }
+  #workspace { max-width: 100%; }
+
+  /* 17 tabs no longer wrap into a tall stack - they scroll horizontally. */
+  #tabs {
+    flex-wrap: nowrap; overflow-x: auto; gap: 6px;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+  #tabs::-webkit-scrollbar { height: 5px; }
+  #tabs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+
+  select { max-width: 100%; }
+}
+
+/* ---------- responsive: phone ---------- */
+
 @media (max-width: 640px) {
-  #workspace { flex-direction: column; align-items: flex-start; }
+  header { padding: 12px 14px; }
+  header h1 { font-size: 17px; }
+  .header-right { gap: 10px; }
+  #workdir-stats { display: none; }
+
+  #tabs { padding: 8px 14px; }
+
   main, #result, #ws-empty { padding-left: 14px; padding-right: 14px; }
+
+  #workspace { margin-left: 14px; margin-right: 14px; width: auto; }
+  .ws-row { flex-direction: column; align-items: stretch; }
+  #ws-thumb { align-self: center; }
+  #ws-thumb img, #ws-thumb video { width: 120px; height: 120px; }
+  .ws-actions button { flex: 1 1 auto; }
+
+  .line { gap: 10px; }
+  .line > label { flex: 1 1 100%; min-width: 0; }
+  input[type=number], select { max-width: 100%; }
+
+  fieldset { padding: 12px; }
+
+  table.facts { min-width: 0; width: 100%; }
+  #analyze-output { overflow-x: auto; }
+}
+
+/* ---------- responsive: touch devices ---------- */
+/* Bigger hit-targets for fingers - fine pointers (mouse) keep the compact sizing. */
+
+@media (pointer: coarse) {
+  #tabs button { padding: 10px 14px; }
+  button, .button { padding: 10px 16px; }
+  button.small { padding: 8px 12px; }
+  .icon-btn { padding: 9px 12px; }
+  .fieldset-toggle { padding: 8px 4px; margin: -8px -4px; }
+  label.check input, label.pin input { width: 18px; height: 18px; }
+  .crop-handle { width: 20px; height: 20px; margin: -10px; }
 }

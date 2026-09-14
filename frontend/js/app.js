@@ -5,7 +5,7 @@ import { initMaker } from './maker.js';
 import { clearCurrent, setCurrent, state } from './state.js';
 import { initTools } from './tools.js';
 import { initWorkspace, setUploaderVisible } from './workspace.js';
-import { $, $$, bytes, el, initSliders, toast, withBusy } from './ui.js';
+import { $, $$, bytes, el, initCollapsibleFieldsets, initSliders, toast, withBusy } from './ui.js';
 
 function initTabs() {
   const buttons = $$('#tabs button');
@@ -151,3 +151,4 @@ initMaker();
 initTools();
 initRecovery();
 initSliders();
+initCollapsibleFieldsets();

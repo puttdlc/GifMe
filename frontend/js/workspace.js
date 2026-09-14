@@ -65,6 +65,16 @@ export function initWorkspace() {
     downloadWithProgress(state.url, state.name);
   });
 
+  const wsToggle = $('#ws-toggle');
+  const wsToggleLabel = $('.ws-toggle-label', wsToggle);
+  wsToggle.addEventListener('click', () => {
+    const collapsed = $('#workspace').classList.toggle('collapsed');
+    const label = collapsed ? 'Expand preview' : 'Collapse preview';
+    wsToggle.setAttribute('aria-expanded', String(!collapsed));
+    wsToggle.setAttribute('aria-label', label);
+    wsToggleLabel.textContent = label;
+  });
+
   subscribe(render);
   subscribe(syncFreshness);
 }

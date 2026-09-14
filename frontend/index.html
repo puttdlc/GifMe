@@ -62,16 +62,23 @@
 
 <!-- The file every tool works on. Upload once, then keep applying tools. -->
 <section id="workspace" hidden>
-  <div id="ws-thumb"></div>
-  <div class="ws-info">
-    <strong id="ws-name"></strong>
-    <span id="ws-facts" class="muted"></span>
+  <div class="ws-row">
+    <div id="ws-thumb"></div>
+    <div class="ws-info">
+      <strong id="ws-name"></strong>
+      <span id="ws-facts" class="muted"></span>
+    </div>
+    <div class="ws-actions">
+      <button id="ws-download" type="button" class="button ghost" disabled>Download</button>
+      <button id="ws-reset" class="ghost">Reset to original</button>
+      <button id="ws-change" class="ghost">Use another file</button>
+    </div>
   </div>
-  <div class="ws-actions">
-    <button id="ws-download" type="button" class="button ghost" disabled>Download</button>
-    <button id="ws-reset" class="ghost">Reset to original</button>
-    <button id="ws-change" class="ghost">Use another file</button>
-  </div>
+  <button id="ws-toggle" type="button" class="ghost ws-toggle" aria-expanded="true" aria-label="Collapse preview">
+    <svg class="chev" viewBox="0 0 20 20" width="12" height="12" fill="none" stroke="currentColor"
+      stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l5 5 5-5"/></svg>
+    <span class="ws-toggle-label">Collapse preview</span>
+  </button>
 </section>
 
 <section id="ws-empty">
@@ -123,7 +130,7 @@
     <div id="maker-options" hidden>
       <fieldset id="range-panel">
         <legend>Toggle a range of frames:</legend>
-        <label class="pin"><input type="checkbox" id="pin-toggle"> Pin to screen</label>
+        <label class="pin" data-keep-visible><input type="checkbox" id="pin-toggle"> Pin to screen</label>
         <div class="line">
           <label>From: <input type="number" id="range-from" value="1" min="1"></label>
           <label>To: <input type="number" id="range-to" value="5" min="1"></label>
