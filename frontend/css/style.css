@@ -10,6 +10,8 @@
   --danger: #c0483f;
   --danger-strong: #a83c34;
   --ok: #63c18a;
+  --fresh-bg: #1c5d34;
+  --fresh-ring: #3ea866;
 }
 
 * { box-sizing: border-box; }
@@ -114,6 +116,14 @@ h4 { margin: 18px 0 6px; }
 #ws-thumb img, #ws-thumb video {
   width: 168px; height: 168px; object-fit: contain;
   background: var(--bg-sunken); border-radius: 6px;
+  outline: 3px solid transparent; outline-offset: 2px;
+  transition: outline-color .2s ease, background-color .2s ease;
+}
+/* The "freshest" file - whichever of the input (here) or the latest result
+   was most recently produced/adopted - gets a dark green frame, so it's
+   obvious at a glance which side of a tool run is the newest file. */
+#ws-thumb.fresh img, #ws-thumb.fresh video {
+  outline-color: var(--fresh-ring); background-color: var(--fresh-bg);
 }
 .ws-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .ws-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -273,6 +283,11 @@ button.ghost:hover, .button.ghost:hover { background: #2b3341; color: var(--text
 }
 #result-body img, #result-body video {
   max-width: 100%; border-radius: 8px; background: var(--bg-sunken);
+  outline: 3px solid transparent; outline-offset: 2px;
+  transition: outline-color .2s ease, background-color .2s ease;
+}
+#result-thumb.fresh {
+  outline-color: var(--fresh-ring); background-color: var(--fresh-bg);
 }
 .result-head { display: flex; gap: 12px; align-items: baseline; margin-bottom: 10px; }
 .result-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 10px; }

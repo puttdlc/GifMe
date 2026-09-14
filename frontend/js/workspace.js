@@ -3,7 +3,7 @@
 
 import { post } from './api.js';
 import { downloadWithProgress } from './download.js';
-import { clearCurrent, setCurrent, state, subscribe } from './state.js';
+import { clearCurrent, markFresh, setCurrent, state, subscribe } from './state.js';
 import { $, bytes, el, isVideoName, toast, withBusy } from './ui.js';
 
 // The GIF Maker builds from its own frame list, so the shared uploader would
@@ -66,6 +66,7 @@ export function initWorkspace() {
   });
 
   subscribe(render);
+  subscribe(syncFreshness);
 }
 
 export async function upload(file) {
@@ -73,7 +74,10 @@ export async function upload(file) {
   return withBusy(btn, async () => {
     const r = await post('/api/upload', {}, { file });
     setCurrent(r);
-    showResult(r, 'Uploaded');
+    // setCurrent already marks the input side fresh - this is just an echo
+    // of the same file, not a new derived result, so the output side
+    // shouldn't steal the highlight.
+    showResult(r, 'Uploaded', { markFresh: false });
     return r;
   });
 }
@@ -83,9 +87,17 @@ export async function uploadFromUrl(url) {
   return withBusy(btn, async () => {
     const r = await post('/api/upload-url', { url });
     setCurrent(r);
-    showResult(r, 'Loaded from URL');
+    showResult(r, 'Loaded from URL', { markFresh: false });
     return r;
   });
+}
+
+// The "freshest" file - whichever of the input (workspace bar) or output
+// (result panel) thumbnail most recently became current - gets a green
+// highlight. The two are mutually exclusive, tracked by state.freshSide.
+function syncFreshness(s) {
+  $('#ws-thumb')?.classList.toggle('fresh', s.freshSide === 'input');
+  $('#result-thumb')?.classList.toggle('fresh', s.freshSide === 'output');
 }
 
 function render(s) {
@@ -148,8 +160,13 @@ function sizeChangeNode(beforeBytes, afterBytes) {
 // Show a finished operation. It stays a side-by-side result until the user
 // explicitly promotes it to the working file with "Set as input".
 // `opts.beforeBytes` is the input file's size, for tools the backend doesn't
-// already report an original_bytes/saved_percent pair for.
+// already report an original_bytes/saved_percent pair for. `opts.markFresh`
+// defaults to true - a genuinely new derived result steals the "freshest"
+// highlight from the input; pass false for an echo of the current input
+// (e.g. the upload confirmation), which shouldn't.
 export function showResult(result, label = 'Done', opts = {}) {
+  if (opts.markFresh !== false) markFresh('output');
+
   const body = $('#result-body');
   body.innerHTML = '';
   const notes = [];
@@ -177,16 +194,20 @@ export function showResult(result, label = 'Done', opts = {}) {
   const downloadBtn = el('button', { class: 'button', type: 'button' }, `Download ${result.name}`);
   downloadBtn.addEventListener('click', () => downloadWithProgress(result.url, result.name));
 
+  const preview = previewNode(result.url, result.name);
+  preview.id = 'result-thumb';
+
   body.append(
     el('div', { class: 'result-head' },
       el('strong', {}, label),
       summary),
-    previewNode(result.url, result.name),
+    preview,
     el('div', { class: 'result-actions' },
       downloadBtn,
       useBtn,
       el('span', { class: 'hint' }, 'Pick "Set as input" to keep editing this result - otherwise the next tool still works on the current input.')),
   );
+  syncFreshness(state);
   $('#result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
