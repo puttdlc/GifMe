@@ -16,6 +16,7 @@ export function createCropper(container, onChange) {
   let sel = { x: 0, y: 0, w: 0, h: 0 };
   let ratio = 0;               // 0 = free
   let drag = null;             // { dir | 'move', start, from }
+  let observer = null;
 
   const bounds = () => ({
     w: img?.naturalWidth || 0,
@@ -164,6 +165,7 @@ export function createCropper(container, onChange) {
   return {
     load(url, name) {
       container.innerHTML = '';
+      observer?.disconnect();
       if (!url) {
         container.append(el('p', { class: 'hint' }, 'Upload a file to set a selection.'));
         img = box = null;
@@ -183,6 +185,13 @@ export function createCropper(container, onChange) {
         commit({ x: 0, y: 0, w: img.naturalWidth, h: img.naturalHeight });
       });
       window.addEventListener('resize', paint);
+      // The box is painted from img.clientWidth (see scale()), which is 0
+      // while this tab is inactive (display:none) - loading a file on a
+      // different tab would otherwise leave the box painted at the wrong
+      // scale until something else happened to call paint() again. Watch
+      // the image itself so switching to this tab repaints it correctly.
+      observer = new ResizeObserver(paint);
+      observer.observe(img);
     },
     setRatio(r) { ratio = r; applyRatio(); },
     setSelection(next) {

@@ -15,6 +15,8 @@ A local, self-hosted GIF/animation toolkit inspired by functions of ezgif.com. R
 - Speed change, Reverse
 - Effects (grayscale, sepia, invert, blur, sharpen, pixelate)
 - Add text overlay · Optimize (lossy compression via gifsicle)
+- Remove Background (colour-key one or more picked colours out to transparency,
+  with a live preview - stills and animations alike, out to PNG/WebP/GIF/APNG)
 - Split into frames (zip of PNGs)
 - Analyzer (dimensions/duration/frame count/size)
 

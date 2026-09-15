@@ -54,14 +54,39 @@ export async function withBusy(button, fn) {
   }
 }
 
-// Range inputs paired with an <output> show their live value.
+// Range inputs paired with an <output> show their live value. Pairing one
+// with an <input type=number class="slider-input"> instead makes that value
+// typeable too, for settings where a drag can't reliably land on the exact
+// number you want - the number field carries no `name`, so the range stays
+// the single thing that gets submitted.
 export function initSliders(root = document) {
   root.querySelectorAll('label.slider').forEach(label => {
     const range = label.querySelector('input[type=range]');
     const out = label.querySelector('output');
-    if (!range || !out) return;
-    const sync = () => { out.textContent = range.value; };
+    const box = label.querySelector('input.slider-input');
+    if (!range || (!out && !box)) return;
+
+    const sync = () => {
+      if (out) out.textContent = range.value;
+      // Not while it's being typed into - see the clamping note below.
+      if (box && document.activeElement !== box) box.value = range.value;
+    };
     range.addEventListener('input', sync);
+
+    if (box) {
+      // Typing drives the slider, which clamps the value to its own min/max
+      // for us. The typed text itself is only rewritten once the field is
+      // committed (blur or Enter): clamping mid-keystroke would rewrite "1"
+      // to the minimum while someone is still on their way to "120".
+      box.addEventListener('input', () => {
+        const n = Number(box.value);
+        if (box.value.trim() === '' || !Number.isFinite(n)) return;
+        range.value = n;
+        range.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      box.addEventListener('change', () => { box.value = range.value; });
+      box.addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
+    }
     sync();
   });
 }

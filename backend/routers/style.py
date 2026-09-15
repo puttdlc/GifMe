@@ -1,4 +1,4 @@
-"""Appearance: effects, captions, censoring, overlays."""
+"""Appearance: effects, captions, censoring, overlays, background removal."""
 from __future__ import annotations
 
 from fastapi import APIRouter, File, Form, UploadFile
@@ -60,6 +60,24 @@ def censor(file: UploadFile = File(None), job: str = Form(None), x: int = Form(0
     guard(gifme.censor, str(src), str(out), x, y, w, h, mode=mode, strength=strength,
           preserve_transparency=preserve_transparency)
     return result(d, out)
+
+
+@router.post("/remove-background")
+def remove_background(file: UploadFile = File(None), job: str = Form(None),
+                      colors: str = Form(""), threshold: int = Form(32),
+                      clamp: int = Form(64), target: str = Form("auto")):
+    """Key one or more picked colours out to transparency.
+
+    The output format has to be settled before the file is named, so the
+    engine resolves it first ("auto" = keep an animation animated, a still
+    still) and the run is handed the concrete format.
+    """
+    d, src = resolve(job, file)
+    fmt = guard(gifme.resolve_bg_target, str(src), target)
+    out = out_path(d, gifme.bg_output_suffix(fmt), stem="nobg")
+    guard(gifme.remove_background, str(src), str(out), colors, threshold=threshold,
+          clamp=clamp, target=fmt)
+    return result(d, out, {"target": fmt})
 
 
 @router.post("/overlay")

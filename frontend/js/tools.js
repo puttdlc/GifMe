@@ -2,17 +2,19 @@
 // their fields by `name`, so most of them need no bespoke code here.
 
 import { get, post, readFields } from './api.js';
+import { createBgPicker, parseHex, toHex } from './bgpicker.js';
 import { createCropper } from './cropper.js';
 import { progressBusy, progressEnd, progressSet, progressStart } from './progress.js';
 import { state, subscribe } from './state.js';
 import { linkDelayFps } from './timing.js';
 import { showFrameGrid, showResult, upload } from './workspace.js';
-import { $, $$, bytes, el, toast, withBusy } from './ui.js';
+import { $, $$, bytes, el, isVideoName, toast, withBusy } from './ui.js';
 
 export function initTools() {
   $$('.tool-form').forEach(bindForm);
   bindRotate();
   bindRegionTools();
+  bindRemoveBackground();
   bindAnalyzer();
   bindSpeedHints();
   bindEffectPresets();
@@ -393,6 +395,117 @@ function bindRegionTools() {
     }
 
     subscribe(s => cropper.load(s.url, s.name));
+  });
+}
+
+// Matches MAX_KEYS in gifme/bgremove.py - each key colour is another full
+// pass over every frame, so the backend caps it too; this just says so before
+// the request is spent.
+const MAX_KEYS = 12;
+
+// Remove Background: the picker owns the preview, this owns the chosen
+// colours - they reach the backend as the hidden `colors` field, a hex list.
+function bindRemoveBackground() {
+  const stage = $('#removebg-stage');
+  if (!stage) return;
+  const field = $('#removebg-colors');
+  const swatches = $('#removebg-swatches');
+  const threshold = $('#panel-removebg input[name=threshold]');
+  const clamp = $('#panel-removebg input[name=clamp]');
+  const submit = $('#panel-removebg button[type=submit]');
+  const colorInput = $('#removebg-color');
+  let keys = [];
+  let loadedUrl;                 // undefined until the first run, so the
+                                 // "nothing loaded" state below still paints
+
+  const picker = createBgPicker(stage, { onPick: addKey });
+
+  function refresh() {
+    field.value = keys.join(',');
+    submit.disabled = !keys.length;
+    renderSwatches();
+    picker.render({ keys, threshold: Number(threshold.value) || 0, clamp: Number(clamp.value) || 0 });
+  }
+
+  function addKey(value) {
+    const rgb = parseHex(value);
+    if (!rgb) return;
+    // Round-tripped through the parser rather than trusted as typed, so every
+    // stored key is one canonical "#rrggbb" - that's what dedupes them, and
+    // what the swatch chips' CSS colour has to be.
+    const key = toHex(...rgb);
+    if (keys.includes(key)) return;
+    if (keys.length >= MAX_KEYS) return toast(`${MAX_KEYS} colours is the limit`, 'error');
+    keys.push(key);
+    refresh();
+  }
+
+  function renderSwatches() {
+    swatches.innerHTML = '';
+    if (!keys.length) {
+      swatches.append(el('span', { class: 'hint' }, 'No colour picked yet - click the background in the preview above.'));
+      return;
+    }
+    keys.forEach(key => {
+      const remove = el('button', { type: 'button', class: 'swatch-remove',
+        'aria-label': `Remove ${key}` }, '×');
+      remove.addEventListener('click', () => {
+        keys = keys.filter(k => k !== key);
+        refresh();
+      });
+      swatches.append(el('span', { class: 'swatch' },
+        el('span', { class: 'swatch-chip', style: `background:${key}` }),
+        el('code', {}, key),
+        remove));
+    });
+  }
+
+  // The two ends of the same fade, so they can't cross: pushing one past the
+  // other takes it along rather than rejecting the drag.
+  const setSlider = (input, value) => {
+    input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  threshold.addEventListener('input', () => {
+    if (Number(clamp.value) < Number(threshold.value)) setSlider(clamp, threshold.value);
+    refresh();
+  });
+  clamp.addEventListener('input', () => {
+    if (Number(threshold.value) > Number(clamp.value)) setSlider(threshold, clamp.value);
+    refresh();
+  });
+
+  $('#removebg-add').addEventListener('click', () => addKey(colorInput.value));
+  $('#removebg-corners').addEventListener('click', () => {
+    const found = picker.corners();
+    if (!found.length) return toast('Nothing to sample yet - upload a file first', 'error');
+    found.forEach(addKey);
+  });
+  $('#removebg-clear').addEventListener('click', () => { keys = []; refresh(); });
+
+  subscribe(async (s) => {
+    // subscribe() fires on every state change (including the freshness
+    // highlight), but only a genuinely different file is worth re-reading
+    // into the canvases - and re-picking colours behind the user's back.
+    if (s.url === loadedUrl) return;
+    loadedUrl = s.url;
+    keys = [];
+    refresh();
+    if (s.url && isVideoName(s.name)) {
+      stage.innerHTML = '';
+      stage.append(el('p', { class: 'hint' },
+        'Video input: convert it to a GIF first (Convert tab) - no video format can carry '
+        + 'transparency, so there would be nowhere to put the result.'));
+      return;
+    }
+    const loading = s.url;
+    if (!await picker.load(s.url, s.name)) return;
+    // Two files swapped in quick succession leave two loads in flight; only
+    // the one that is still the current file gets to seed the colours.
+    if (loading !== loadedUrl) return;
+    // A first guess so the tab does something the moment it opens; the user
+    // clears or adds to it from there.
+    picker.corners().slice(0, 1).forEach(addKey);
   });
 }
 

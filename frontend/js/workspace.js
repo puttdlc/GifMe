@@ -121,7 +121,7 @@ function render(s) {
   bar.hidden = false;
   empty.hidden = true;
   $('#ws-thumb').innerHTML = '';
-  $('#ws-thumb').append(previewNode(s.url, s.name, true));
+  $('#ws-thumb').append(previewNode(s.url, s.name, true, s.meta?.transparency));
   $('#ws-name').textContent = s.name;
   $('#ws-facts').textContent = factLine(s.meta, s.sizeBytes);
   $('#ws-download').disabled = false;
@@ -139,7 +139,9 @@ function factLine(meta, size) {
   return bits.join(' · ');
 }
 
-function previewNode(url, name, small = false) {
+// `transparent` puts a checkerboard behind the file, so a cut-out doesn't
+// read as a black rectangle on this dark UI.
+function previewNode(url, name, small = false, transparent = false) {
   const bust = `${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`;
   if (isVideoName(name)) {
     const video = el('video', { src: bust, controls: '', autoplay: '', loop: '', muted: '' });
@@ -151,7 +153,8 @@ function previewNode(url, name, small = false) {
     video.defaultMuted = true;
     return video;
   }
-  return el('img', { src: bust, alt: name, class: small ? 'thumb' : '' });
+  const classes = [small ? 'thumb' : '', transparent ? 'checkered' : ''].filter(Boolean);
+  return el('img', { src: bust, alt: name, class: classes.join(' ') });
 }
 
 // A colored "X% smaller/bigger" (or "about the same size") node comparing
@@ -204,7 +207,7 @@ export function showResult(result, label = 'Done', opts = {}) {
   const downloadBtn = el('button', { class: 'button', type: 'button' }, `Download ${result.name}`);
   downloadBtn.addEventListener('click', () => downloadWithProgress(result.url, result.name));
 
-  const preview = previewNode(result.url, result.name);
+  const preview = previewNode(result.url, result.name, false, result.meta?.transparency);
   preview.id = 'result-thumb';
 
   body.append(

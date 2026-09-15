@@ -55,7 +55,10 @@ def _probe_image(p: Path, per_frame: bool) -> dict:
         count = getattr(im, "n_frames", 1)
         info["nb_frames"] = count
         info["loop"] = im.info.get("loop", 0) if count > 1 else None
-        info["transparency"] = "transparency" in im.info
+        # Either kind counts: a palette/GIF transparency index, or a real
+        # alpha channel (what an RGBA PNG/WebP - say, one the Remove
+        # Background tab just wrote - carries instead).
+        info["transparency"] = "transparency" in im.info or im.mode in ("RGBA", "LA", "PA")
         if im.format == "GIF":
             tables = _gif_color_tables(p)
             if tables:

@@ -53,6 +53,7 @@
   <button data-tab="text">Add Text</button>
   <button data-tab="overlay">Overlay</button>
   <button data-tab="censor">Censor</button>
+  <button data-tab="removebg">Remove BG</button>
   <button data-tab="optimize">Optimize</button>
   <button data-tab="split">Split</button>
   <button data-tab="sprite">Sprite Sheet</button>
@@ -516,6 +517,68 @@
       </div>
       <label class="check"><input type="checkbox" name="preserve_transparency" checked> preserve transparency</label>
       <button type="submit" class="primary">Censor</button>
+    </form>
+  </section>
+
+  <!-- ================= Remove Background ================= -->
+  <section class="panel" id="panel-removebg">
+    <h2>Remove Background</h2>
+    <p class="hint">Click the background in the preview to key that colour out - every pixel
+      close enough to it turns transparent. Works on stills (PNG, JPG, WebP…) and on
+      animations, where the colour is removed from every frame. The corner colour is picked
+      for you to start with.</p>
+
+    <div id="removebg-stage" class="stage"></div>
+
+    <form class="tool-form" data-endpoint="/api/remove-background" data-label="Background removed">
+      <!-- Filled in by the picker below: the chosen colours as a hex list. -->
+      <input type="hidden" name="colors" id="removebg-colors">
+
+      <fieldset>
+        <legend>Colours to remove</legend>
+        <div class="line">
+          <label>Pick manually <input type="color" id="removebg-color" value="#ffffff"></label>
+          <button type="button" id="removebg-add" class="ghost">Add this colour</button>
+          <button type="button" id="removebg-corners" class="ghost">Add corner colours</button>
+          <button type="button" id="removebg-clear" class="ghost">Clear all</button>
+        </div>
+        <div id="removebg-swatches" class="swatches"></div>
+        <p class="hint">Add more than one for a background that isn't a single flat colour -
+          a pixel is removed when it is close to any of them.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Tolerance</legend>
+        <div class="line">
+          <label class="slider">Threshold
+            <input type="number" class="slider-input" min="0" max="255" step="1">
+            <input type="range" name="threshold" min="0" max="255" value="32"></label>
+          <label class="slider">Clamp
+            <input type="number" class="slider-input" min="0" max="255" step="1">
+            <input type="range" name="clamp" min="0" max="255" value="64"></label>
+        </div>
+        <p class="hint">Distance is how far a pixel is from a picked colour (0-255, the
+          largest difference across R/G/B). Everything at or below <strong>threshold</strong>
+          is removed outright; everything at or above <strong>clamp</strong> is kept
+          untouched; in between it fades out, which is what keeps edges smooth. Drag the
+          sliders or type an exact value - values outside 0-255 are clamped, and clamp never
+          drops below threshold.</p>
+      </fieldset>
+
+      <label>Output format
+        <select name="target">
+          <option value="auto">Auto - PNG for stills, GIF for animations</option>
+          <option value="png">PNG (stills)</option>
+          <option value="webp">WebP</option>
+          <option value="gif">GIF</option>
+          <option value="apng">APNG</option>
+        </select>
+      </label>
+      <p class="hint">GIF transparency is on/off per pixel, so a soft edge comes out hard
+        there - pick PNG, WebP or APNG to keep the fade. JPEG isn't offered: it can't store
+        transparency at all.</p>
+
+      <button type="submit" class="primary" disabled>Remove background</button>
     </form>
   </section>
 

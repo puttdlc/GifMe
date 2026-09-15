@@ -13,7 +13,9 @@ Modules:
   timing   speed / order / trim     effects   filters and adjustments
   text     captions                 optimize  size reduction
   compose  censor / overlay / sprite  convert format conversion
+  bgremove colour-key background removal
 """
+from .bgremove import BG_TARGETS, bg_output_suffix, remove_background, resolve_bg_target
 from .colors import parse_color
 from .compose import censor, overlay_image, sprite_sheet
 from .convert import convert
@@ -30,11 +32,11 @@ from .text import POSITIONS, add_text, list_fonts
 from .timing import change_speed, cut, drop_frames, reverse, set_delay, set_loop
 
 __all__ = [
-    "ToolError", "DEFAULT_DELAY_MS", "NAMED_EFFECTS", "POSITIONS", "RESAMPLE",
-    "add_text", "analyze", "apply_effect", "auto_target_size", "build_gif", "censor",
-    "change_speed", "check_dependencies", "convert", "crop", "cut", "drop_frames",
+    "ToolError", "BG_TARGETS", "DEFAULT_DELAY_MS", "NAMED_EFFECTS", "POSITIONS", "RESAMPLE",
+    "add_text", "analyze", "apply_effect", "auto_target_size", "bg_output_suffix", "build_gif",
+    "censor", "change_speed", "check_dependencies", "convert", "crop", "cut", "drop_frames",
     "extract_frames", "flip", "images_to_gif", "kind_of", "list_fonts", "load_frames",
     "make_thumbnails", "map_frames", "optimize_gif", "overlay_image", "parse_color",
-    "reduce_colors", "resize", "reverse", "rotate", "save_gif", "set_delay", "set_loop",
-    "split_frames", "sprite_sheet", "video_to_gif",
+    "reduce_colors", "remove_background", "resize", "resolve_bg_target", "reverse", "rotate",
+    "save_gif", "set_delay", "set_loop", "split_frames", "sprite_sheet", "video_to_gif",
 ]
