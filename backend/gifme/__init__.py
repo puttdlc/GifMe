@@ -15,7 +15,8 @@ Modules:
   compose  censor / overlay / sprite  convert format conversion
   bgremove colour-key background removal
 """
-from .bgremove import BG_TARGETS, bg_output_suffix, remove_background, resolve_bg_target
+from .bgremove import (BG_TARGETS, FEATHER_MODES, bg_output_suffix, remove_background,
+                       resolve_bg_target)
 from .colors import parse_color
 from .compose import censor, overlay_image, sprite_sheet
 from .convert import convert
@@ -32,7 +33,8 @@ from .text import POSITIONS, add_text, list_fonts
 from .timing import change_speed, cut, drop_frames, reverse, set_delay, set_loop
 
 __all__ = [
-    "ToolError", "BG_TARGETS", "DEFAULT_DELAY_MS", "NAMED_EFFECTS", "POSITIONS", "RESAMPLE",
+    "ToolError", "BG_TARGETS", "DEFAULT_DELAY_MS", "FEATHER_MODES", "NAMED_EFFECTS", "POSITIONS",
+    "RESAMPLE",
     "add_text", "analyze", "apply_effect", "auto_target_size", "bg_output_suffix", "build_gif",
     "censor", "change_speed", "check_dependencies", "convert", "crop", "cut", "drop_frames",
     "extract_frames", "flip", "images_to_gif", "kind_of", "list_fonts", "load_frames",

@@ -405,6 +405,13 @@ button.ghost:hover, .button.ghost:hover { background: #2b3341; color: var(--text
   border: 1px solid var(--border);
 }
 .swatch code { color: var(--text); font-size: 12px; }
+/* Magic Select only: which click this swatch came from - matters once two
+   entries share a colour but sit at different points on the image. */
+.swatch-index {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 15px; height: 15px; flex: none; border-radius: 50%;
+  background: var(--bg); color: var(--muted); font-size: 10px; font-weight: 600;
+}
 .swatch-remove {
   margin: 0; padding: 0; width: 18px; height: 18px; flex: none;
   display: inline-flex; align-items: center; justify-content: center;

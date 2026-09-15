@@ -404,58 +404,102 @@ function bindRegionTools() {
 const MAX_KEYS = 12;
 
 // Remove Background: the picker owns the preview, this owns the chosen
-// colours - they reach the backend as the hidden `colors` field, a hex list.
+// colours (and, in Magic Select, the point each was clicked at) - they reach
+// the backend as the hidden `colors`/`points` fields.
 function bindRemoveBackground() {
   const stage = $('#removebg-stage');
   if (!stage) return;
   const field = $('#removebg-colors');
+  const pointsField = $('#removebg-points');
   const swatches = $('#removebg-swatches');
   const threshold = $('#panel-removebg input[name=threshold]');
   const clamp = $('#panel-removebg input[name=clamp]');
   const submit = $('#panel-removebg button[type=submit]');
   const colorInput = $('#removebg-color');
-  let keys = [];
+  const addBtn = $('#removebg-add');
+  const magicBox = $('#removebg-magic');
+  const multiHint = $('#removebg-multi-hint');
+  const featherBox = $('#removebg-feather');
+  const featherAmount = $('#panel-removebg input[name=feather_amount]');
+  const featherAmountBox = $('#removebg-feather-amount input.slider-input');
+  const featherMode = $('#panel-removebg select[name=feather_mode]');
+  // Each entry is {hex, point}: point is an {x, y} fraction (0-1) of where it
+  // was clicked, or null for a manually-typed colour (only possible with
+  // Magic Select off, since a typed hex code has nowhere to flood-fill from).
+  let entries = [];
   let loadedUrl;                 // undefined until the first run, so the
                                  // "nothing loaded" state below still paints
 
   const picker = createBgPicker(stage, { onPick: addKey });
+  const magicOn = () => magicBox.checked;
 
   function refresh() {
-    field.value = keys.join(',');
-    submit.disabled = !keys.length;
-    renderSwatches();
-    picker.render({ keys, threshold: Number(threshold.value) || 0, clamp: Number(clamp.value) || 0 });
+    const magic = magicOn();
+    field.value = entries.map(e => e.hex).join(',');
+    pointsField.value = entries
+      .map(e => e.point ? `${e.point.x.toFixed(4)},${e.point.y.toFixed(4)}` : '0,0').join(';');
+    submit.disabled = !entries.length;
+    multiHint.textContent = magic
+      ? 'Click once per colour: each click only removes the patch connected to that spot, '
+        + 'so a second, separate patch of the same colour needs its own click too.'
+      : "Add more than one for a background that isn't a single flat colour, since a pixel "
+        + 'is removed when it is close to any of them.';
+    renderSwatches(magic);
+    picker.render({
+      keys: entries.map(e => e.hex), points: entries.map(e => e.point),
+      threshold: Number(threshold.value) || 0, clamp: Number(clamp.value) || 0, magic,
+      feather: featherBox.checked, featherAmount: Number(featherAmount.value) || 0,
+      featherMode: featherMode.value,
+    });
   }
 
-  function addKey(value) {
+  // `point` is the {x, y} fraction it was picked at, or null for a manual
+  // hex entry. Magic Select requires one, since there's nothing to
+  // flood-fill from otherwise.
+  function addKey(value, point = null) {
     const rgb = parseHex(value);
     if (!rgb) return;
+    const magic = magicOn();
+    if (magic && !point) {
+      return toast('Magic Select needs a click point: click the background in the preview '
+        + 'above, or turn Magic Select off to type a hex code instead.', 'error');
+    }
     // Round-tripped through the parser rather than trusted as typed, so every
-    // stored key is one canonical "#rrggbb" - that's what dedupes them, and
-    // what the swatch chips' CSS colour has to be.
-    const key = toHex(...rgb);
-    if (keys.includes(key)) return;
-    if (keys.length >= MAX_KEYS) return toast(`${MAX_KEYS} colours is the limit`, 'error');
-    keys.push(key);
+    // stored key is one canonical "#rrggbb" - that's what the swatch chip's
+    // CSS colour has to be, and (outside Magic Select) what dedupes entries.
+    // Inside Magic Select, two clicks of the same colour on two disconnected
+    // patches are two different seed points and both are kept - like
+    // shift-clicking a second region with a magic wand tool.
+    const hex = toHex(...rgb);
+    const duplicate = magic
+      ? entries.some(e => e.hex === hex && e.point
+          && Math.abs(e.point.x - point.x) < 0.004 && Math.abs(e.point.y - point.y) < 0.004)
+      : entries.some(e => e.hex === hex);
+    if (duplicate) return;
+    if (entries.length >= MAX_KEYS) return toast(`${MAX_KEYS} colours is the limit`, 'error');
+    entries.push({ hex, point });
     refresh();
   }
 
-  function renderSwatches() {
+  function renderSwatches(magic) {
     swatches.innerHTML = '';
-    if (!keys.length) {
+    if (!entries.length) {
       swatches.append(el('span', { class: 'hint' }, 'No colour picked yet - click the background in the preview above.'));
       return;
     }
-    keys.forEach(key => {
+    entries.forEach((entry, i) => {
       const remove = el('button', { type: 'button', class: 'swatch-remove',
-        'aria-label': `Remove ${key}` }, '×');
+        'aria-label': `Remove ${entry.hex}` }, '×');
       remove.addEventListener('click', () => {
-        keys = keys.filter(k => k !== key);
+        entries = entries.filter(e => e !== entry);
         refresh();
       });
       swatches.append(el('span', { class: 'swatch' },
-        el('span', { class: 'swatch-chip', style: `background:${key}` }),
-        el('code', {}, key),
+        el('span', { class: 'swatch-chip', style: `background:${entry.hex}` }),
+        // In Magic Select this doubles as "which click this is" - useful once
+        // two entries share a colour but not a spot on the image.
+        magic ? el('span', { class: 'swatch-index' }, String(i + 1)) : '',
+        el('code', {}, entry.hex),
         remove));
     });
   }
@@ -475,13 +519,51 @@ function bindRemoveBackground() {
     refresh();
   });
 
-  $('#removebg-add').addEventListener('click', () => addKey(colorInput.value));
+  // The amount and style only do anything while feathering itself is on -
+  // disabled rather than just ignored, so that's visible at a glance (same
+  // idea as updateManualControls below).
+  function updateFeatherControls() {
+    const on = featherBox.checked;
+    featherAmount.disabled = !on;
+    if (featherAmountBox) featherAmountBox.disabled = !on;
+    featherMode.disabled = !on;
+  }
+  featherBox.addEventListener('change', () => { updateFeatherControls(); refresh(); });
+  featherAmount.addEventListener('input', refresh);
+  featherMode.addEventListener('change', refresh);
+  updateFeatherControls();
+
+  // A typed hex code has no click point, so it only makes sense with Magic
+  // Select off - the button is disabled rather than silently ignored.
+  function updateManualControls() {
+    const on = magicOn();
+    addBtn.disabled = on;
+    addBtn.title = on
+      ? 'Magic Select needs a click point: click the preview above instead, or turn Magic '
+        + 'Select off to type a hex code.' : '';
+  }
+  magicBox.addEventListener('change', () => {
+    updateManualControls();
+    // The two modes need different data per colour (a point vs. nothing to
+    // flood-fill from) - rather than guess which existing entries still make
+    // sense, start clean and say why.
+    if (entries.length) {
+      entries = [];
+      toast(magicOn()
+        ? 'Magic Select on: pick your colours again by clicking the preview.'
+        : 'Magic Select off: pick your colours again; every matching pixel will be removed, connected or not.');
+    }
+    refresh();
+  });
+  updateManualControls();
+
+  addBtn.addEventListener('click', () => addKey(colorInput.value));
   $('#removebg-corners').addEventListener('click', () => {
     const found = picker.corners();
     if (!found.length) return toast('Nothing to sample yet - upload a file first', 'error');
-    found.forEach(addKey);
+    found.forEach(c => addKey(c.hex, { x: c.x, y: c.y }));
   });
-  $('#removebg-clear').addEventListener('click', () => { keys = []; refresh(); });
+  $('#removebg-clear').addEventListener('click', () => { entries = []; refresh(); });
 
   subscribe(async (s) => {
     // subscribe() fires on every state change (including the freshness
@@ -489,7 +571,7 @@ function bindRemoveBackground() {
     // into the canvases - and re-picking colours behind the user's back.
     if (s.url === loadedUrl) return;
     loadedUrl = s.url;
-    keys = [];
+    entries = [];
     refresh();
     if (s.url && isVideoName(s.name)) {
       stage.innerHTML = '';
@@ -505,7 +587,7 @@ function bindRemoveBackground() {
     if (loading !== loadedUrl) return;
     // A first guess so the tab does something the moment it opens; the user
     // clears or adds to it from there.
-    picker.corners().slice(0, 1).forEach(addKey);
+    picker.corners().slice(0, 1).forEach(c => addKey(c.hex, { x: c.x, y: c.y }));
   });
 }
 

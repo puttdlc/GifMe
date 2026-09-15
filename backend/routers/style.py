@@ -65,19 +65,34 @@ def censor(file: UploadFile = File(None), job: str = Form(None), x: int = Form(0
 @router.post("/remove-background")
 def remove_background(file: UploadFile = File(None), job: str = Form(None),
                       colors: str = Form(""), threshold: int = Form(32),
-                      clamp: int = Form(64), target: str = Form("auto")):
+                      clamp: int = Form(64), target: str = Form("auto"),
+                      magic: bool = Form(True), points: str = Form(""),
+                      feather: bool = Form(True), feather_amount: float = Form(2.0),
+                      feather_mode: str = Form("inward")):
     """Key one or more picked colours out to transparency.
 
     The output format has to be settled before the file is named, so the
     engine resolves it first ("auto" = keep an animation animated, a still
     still) and the run is handed the concrete format.
+
+    `magic` (Magic Select, on by default) restricts each colour to the
+    region flood-reachable from where it was clicked, instead of removing
+    every matching pixel in the frame - see gifme.bgremove. It needs
+    `points`, one "x,y" fraction per colour in `colors`, in order.
+
+    `feather` (on by default) blurs the finished mask by `feather_amount`
+    pixels, softening the cut edge on top of whatever the tolerance band
+    already did - independently of `magic`, since it works on the mask
+    either mode produces. `feather_mode` ("inward" by default, or "glow")
+    picks how - see gifme.bgremove.FEATHER_MODES.
     """
     d, src = resolve(job, file)
     fmt = guard(gifme.resolve_bg_target, str(src), target)
     out = out_path(d, gifme.bg_output_suffix(fmt), stem="nobg")
     guard(gifme.remove_background, str(src), str(out), colors, threshold=threshold,
-          clamp=clamp, target=fmt)
-    return result(d, out, {"target": fmt})
+          clamp=clamp, target=fmt, magic=magic, points=points, feather=feather,
+          feather_amount=feather_amount, feather_mode=feather_mode)
+    return result(d, out, {"target": fmt, "magic": magic})
 
 
 @router.post("/overlay")
