@@ -89,7 +89,7 @@ function applyLoadedFrames(r) {
   toast(`${added.length} frames added`);
 }
 
-async function loadFrames(fileList, input) {
+export async function loadFrames(fileList, input) {
   if (!fileList?.length) return;
   await withBusy($('#maker-add'), async () => {
     const r = await post('/api/frames/load', { job: job || '', sort: 'name' },

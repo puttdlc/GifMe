@@ -3,6 +3,7 @@
 
 import { post } from './api.js';
 import { downloadWithProgress } from './download.js';
+import { attachExpand, collapseExpand, isExpandedWithin } from './expand.js';
 import { clearCurrent, markFresh, setCurrent, state, subscribe } from './state.js';
 import { $, bytes, el, isVideoName, toast, withBusy } from './ui.js';
 
@@ -120,8 +121,11 @@ function render(s) {
   }
   bar.hidden = false;
   empty.hidden = true;
-  $('#ws-thumb').innerHTML = '';
-  $('#ws-thumb').append(previewNode(s.url, s.name, true, s.meta?.transparency));
+  const thumb = $('#ws-thumb');
+  if (isExpandedWithin(thumb)) collapseExpand({ immediate: true });
+  thumb.innerHTML = '';
+  thumb.append(previewNode(s.url, s.name, true, s.meta?.transparency));
+  attachExpand(thumb);
   $('#ws-name').textContent = s.name;
   $('#ws-facts').textContent = factLine(s.meta, s.sizeBytes);
   $('#ws-download').disabled = false;
@@ -181,6 +185,7 @@ export function showResult(result, label = 'Done', opts = {}) {
   if (opts.markFresh !== false) markFresh('output');
 
   const body = $('#result-body');
+  if (isExpandedWithin(body)) collapseExpand({ immediate: true });
   body.innerHTML = '';
   const notes = [];
   if (result.meta?.width) notes.push(`${result.meta.width}×${result.meta.height}`);
@@ -209,12 +214,14 @@ export function showResult(result, label = 'Done', opts = {}) {
 
   const preview = previewNode(result.url, result.name, false, result.meta?.transparency);
   preview.id = 'result-thumb';
+  const previewFrame = el('div', { class: 'media-frame' }, preview);
+  attachExpand(previewFrame);
 
   body.append(
     el('div', { class: 'result-head' },
       el('strong', {}, label),
       summary),
-    preview,
+    previewFrame,
     el('div', { class: 'result-actions' },
       downloadBtn,
       useBtn,

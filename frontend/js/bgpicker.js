@@ -9,6 +9,7 @@
 // a frame instead of a round trip. The server still does the real work,
 // across every frame at full resolution, when the tool is actually run.
 
+import { attachExpand, collapseExpand, isExpandedWithin } from './expand.js';
 import { el } from './ui.js';
 
 // The working canvas is capped on its long edge: the preview is repainted on
@@ -153,6 +154,7 @@ export function createBgPicker(container, { onPick } = {}) {
   let paintScheduled = false;
 
   function message(text) {
+    if (isExpandedWithin(container)) collapseExpand({ immediate: true });
     container.innerHTML = '';
     container.append(el('p', { class: 'hint' }, text));
     source = sourceCanvas = sourceCtx = outCanvas = readout = null;
@@ -301,10 +303,12 @@ export function createBgPicker(container, { onPick } = {}) {
           });
 
           container.innerHTML = '';
+          const stage = el('div', { class: 'bg-stage' },
+            pane('Source - click to pick', sourceCanvas, readout),
+            pane('Preview', outCanvas));
+          attachExpand(stage);
           container.append(
-            el('div', { class: 'bg-stage' },
-              pane('Source - click to pick', sourceCanvas, readout),
-              pane('Preview', outCanvas)),
+            stage,
             el('p', { class: 'hint' },
               'The preview is one frame at a reduced size; running the tool keys every '
               + 'frame of the file at full resolution.'));

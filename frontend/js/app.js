@@ -1,10 +1,12 @@
 // Entry point: tabs, dependency banner, and module wiring.
 
 import { get, post } from './api.js';
-import { initMaker } from './maker.js';
+import { filesFromClipboard, pasteIntoHovered } from './filedrop.js';
+import { initMaker, loadFrames } from './maker.js';
+import { initResettable } from './reset.js';
 import { clearCurrent, setCurrent, state } from './state.js';
 import { initTools } from './tools.js';
-import { initWorkspace, setUploaderVisible } from './workspace.js';
+import { initWorkspace, setUploaderVisible, upload } from './workspace.js';
 import { $, $$, bytes, el, initCollapsibleFieldsets, initSliders, toast, withBusy } from './ui.js';
 
 function initTabs() {
@@ -21,6 +23,73 @@ function initTabs() {
   const wanted = location.hash.slice(1);
   const target = buttons.find(b => b.dataset.tab === wanted);
   if (target) target.click();
+}
+
+// A file dropped anywhere the app doesn't already have a dropzone - which,
+// until now, meant *everywhere* outside the couple of small boxes that
+// handle it - never reached any of GifMe's own code at all: with no
+// listener calling preventDefault, the browser's own default action took
+// over instead, navigating the tab away to show the raw file and silently
+// wiping out the whole app. This is the safety net: dragover/drop are
+// intercepted globally (only for an actual file drag - e.getFiles wouldn't
+// exist for e.g. dragging selected text, which is left alone) so a miss
+// never loses the app, and a drop that isn't already claimed by one of the
+// specific dropzones (below, or the Overlay/Video to GIF fields in
+// tools.js) still goes somewhere useful instead of nowhere: the GIF Maker's
+// frame list while that tab is open, the shared workspace file otherwise -
+// exactly as if it had landed squarely in the small box. A clipboard paste
+// (Ctrl+V of an actual screenshot or copied image, not a link - see
+// filedrop.js) falls back to the exact same place, for the same reason.
+function isFileDrag(e) {
+  return Array.from(e.dataTransfer?.types || []).includes('Files');
+}
+
+// Where an otherwise-unclaimed file (dropped or pasted) ends up.
+function routeFiles(files) {
+  if (!files.length) return;
+  if ($('#tabs button.active')?.dataset.tab === 'make') loadFrames(files);
+  else upload(files[0]);
+}
+
+function initGlobalDrop() {
+  let depth = 0;   // nested dragenter/dragleave pairs - see MDN's own caveat
+                   // on why a plain enter/leave pair isn't enough
+
+  window.addEventListener('dragenter', (e) => {
+    if (!isFileDrag(e)) return;
+    depth++;
+    document.body.classList.add('page-drop-active');
+  });
+  window.addEventListener('dragover', (e) => {
+    if (isFileDrag(e)) e.preventDefault();
+  });
+  window.addEventListener('dragleave', (e) => {
+    if (!isFileDrag(e)) return;
+    depth = Math.max(0, depth - 1);
+    if (depth === 0) document.body.classList.remove('page-drop-active');
+  });
+  window.addEventListener('drop', (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    depth = 0;
+    document.body.classList.remove('page-drop-active');
+    if (e.target.closest('.dropzone')) return;   // already handled there
+    routeFiles([...(e.dataTransfer.files || [])]);
+  });
+
+  // Unlike a drop, a paste carries no coordinates - pasteIntoHovered()
+  // covers "the pointer is sitting over one of the small file-drop fields
+  // right now"; anything else (nothing under the pointer, or the pointer
+  // is over ordinary page content) falls back to the same routing a drop
+  // would get. A plain text paste is untouched either way: filesFromClipboard
+  // comes back empty for one, so nothing here ever runs for it.
+  window.addEventListener('paste', (e) => {
+    if (pasteIntoHovered(e)) return;
+    const files = filesFromClipboard(e);
+    if (!files.length) return;
+    e.preventDefault();
+    routeFiles(files);
+  });
 }
 
 const ENGINE_LABELS = {
@@ -143,6 +212,7 @@ function initRecovery() {
 }
 
 initTabs();
+initGlobalDrop();
 setUploaderVisible($('#tabs button.active').dataset.tab !== 'make');
 initHealth();
 initWorkdir();
@@ -152,3 +222,4 @@ initTools();
 initRecovery();
 initSliders();
 initCollapsibleFieldsets();
+initResettable();

@@ -3,6 +3,7 @@
 // or nudge it with the arrow keys. Coordinates are reported in the image's
 // real pixels, not the on-screen preview size.
 
+import { attachExpand, collapseExpand, isExpandedWithin } from './expand.js';
 import { el } from './ui.js';
 
 const MIN = 8;                 // smallest selection, in image pixels
@@ -164,6 +165,7 @@ export function createCropper(container, onChange) {
 
   return {
     load(url, name) {
+      if (isExpandedWithin(container)) collapseExpand({ immediate: true });
       container.innerHTML = '';
       observer?.disconnect();
       if (!url) {
@@ -178,6 +180,7 @@ export function createCropper(container, onChange) {
       box.addEventListener('pointerdown', onDown);
       box.addEventListener('keydown', onKey);
       wrap.append(img, box);
+      attachExpand(wrap);
       container.append(wrap, el('p', { class: 'hint' },
         'Drag the box to move it, pull a handle to resize, or type exact values below. '
         + 'Arrow keys nudge by 1px (Shift 10px, Alt resizes).'));

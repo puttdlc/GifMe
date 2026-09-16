@@ -67,17 +67,28 @@ def overlay_image(src: str, dst: str, overlay_path: str, x: int = 0, y: int = 0,
 
 
 def sprite_sheet(src: str, dst: str, columns: int = 0, padding: int = 0,
-                 background: str = "#00000000") -> None:
-    """Lay every frame out on one image."""
+                 background: str = "#00000000",
+                 preserve_transparency: bool = True) -> None:
+    """Lay every frame out on one image.
+
+    preserve_transparency (on by default) keeps each frame's own transparent
+    pixels - and the padding between frames - see-through: the canvas itself
+    starts fully transparent, regardless of the background colour, since an
+    HTML colour picker can only ever supply an opaque one. Turned off, the
+    sheet is flattened to opaque, with that background colour filling in
+    wherever a frame was see-through or there was gap between frames.
+    """
     frames, _delays, _loop = load_frames(src)
     cols = columns if columns > 0 else max(1, math.ceil(math.sqrt(len(frames))))
     rows = math.ceil(len(frames) / cols)
     fw = max(f.width for f in frames)
     fh = max(f.height for f in frames)
+    bg = parse_color(background)
+    if preserve_transparency:
+        bg = (*bg[:3], 0)
     sheet = Image.new("RGBA",
-                      (cols * fw + padding * (cols + 1), rows * fh + padding * (rows + 1)),
-                      parse_color(background))
+                      (cols * fw + padding * (cols + 1), rows * fh + padding * (rows + 1)), bg)
     for i, f in enumerate(frames):
         c, r = i % cols, i // cols
         sheet.paste(f, (padding + c * (fw + padding), padding + r * (fh + padding)), f)
-    save_still(sheet, dst)
+    save_still(sheet if preserve_transparency else sheet.convert("RGB"), dst)

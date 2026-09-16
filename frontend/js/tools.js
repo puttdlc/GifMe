@@ -4,6 +4,7 @@
 import { get, post, readFields } from './api.js';
 import { createBgPicker, parseHex, toHex } from './bgpicker.js';
 import { createCropper } from './cropper.js';
+import { attachFileDrop } from './filedrop.js';
 import { progressBusy, progressEnd, progressSet, progressStart } from './progress.js';
 import { state, subscribe } from './state.js';
 import { linkDelayFps } from './timing.js';
@@ -20,7 +21,20 @@ export function initTools() {
   bindEffectPresets();
   bindOptimizeMethod();
   bindAutoUse();
+  bindFileDropFields();
   loadFonts();
+}
+
+// Tool-form file inputs that aren't the shared workspace file - Overlay's
+// watermark image, Video to GIF's source clip - only ever had the bare
+// browser file picker button. Give them the same drop-a-file/paste-a-link
+// affordance every other upload spot in the app already has.
+function bindFileDropFields() {
+  const video = $('#panel-video input[type=file]');
+  if (video) attachFileDrop(video, { label: 'a video', example: 'clip.mp4' });
+
+  const overlay = $('#panel-overlay input[type=file][data-extra]');
+  if (overlay) attachFileDrop(overlay, { label: 'an image', example: 'logo.png' });
 }
 
 // "Blur", "Sharpen" and "Pixelate" in the effect preset list are really just
@@ -53,6 +67,7 @@ const OPTIMIZE_HINTS = {
   drop: 'Dropping frames shortens playback but keeps colours and pixels untouched.',
   transparency: 'Strips redundant transparency/extension data that gifsicle otherwise keeps.',
   colormap: 'Forces every frame onto one shared colour table instead of per-frame tables. Set max colours to 256 to shrink the file without a visible quality loss.',
+  temporal: 'Dithers every frame with a fixed, position-based pattern so static content stops shimmering between frames, then marks any pixel that barely changed from the previous frame as transparent instead of re-encoding it. Big wins on mostly-static footage (screen recordings, talking heads); raise delta tolerance for more compression at the cost of ghosting on slow motion. "Do not stack frames" keeps a moving subject on a transparent background from leaving a trail - turn it off only if you actually want old frames to pile up.',
   combined: 'Runs lossy compression, colour reduction and transparency stripping together.',
   auto: 'Tries every method above, weakest first, keeping whichever attempt is smallest, until the target size is hit or three attempts in a row help not at all.',
 };
@@ -79,7 +94,7 @@ function bindOptimizeMethod() {
   apply();
 }
 
-const AUTO_CATEGORIES = ['lossy', 'colors', 'colormap', 'drop'];
+const AUTO_CATEGORIES = ['lossy', 'temporal', 'colors', 'colormap', 'drop'];
 
 // The "Use:" checkboxes let the automated run skip specific compression
 // families entirely. At least one has to stay checked - unchecking the last

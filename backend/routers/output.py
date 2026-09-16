@@ -32,13 +32,16 @@ async def optimize_auto_stop(run_id: str = Form(...)):
 def optimize(file: UploadFile = File(None), job: str = Form(None),
                    method: str = Form("lossy"), lossy: int = Form(0), colors: int = Form(0),
                    level: int = Form(3), drop_every: int = Form(0),
-                   dither: bool = Form(True), preserve_transparency: bool = Form(True)):
+                   dither: bool = Form(True), preserve_transparency: bool = Form(True),
+                   temporal_strength: int = Form(24), delta_threshold: int = Form(6),
+                   no_stack: bool = Form(True)):
     d, src = resolve(job, file)
     out = out_path(d, ".gif")
     before = src.stat().st_size
     guard(gifme.optimize_gif, str(src), str(out), lossy=lossy, colors=colors or None,
           optimize_level=level, method=method, drop_every=drop_every, dither=dither,
-          preserve_transparency=preserve_transparency)
+          preserve_transparency=preserve_transparency, temporal_strength=temporal_strength,
+          delta_threshold=delta_threshold, no_stack=no_stack)
     saved = before - out.stat().st_size
     return result(d, out, {
         "original_bytes": before,
@@ -125,11 +128,12 @@ def convert(file: UploadFile = File(None), job: str = Form(None),
 
 @router.post("/sprite")
 def sprite(file: UploadFile = File(None), job: str = Form(None), columns: int = Form(0),
-                 padding: int = Form(0), background: str = Form("#00000000")):
+                 padding: int = Form(0), background: str = Form("#00000000"),
+                 preserve_transparency: bool = Form(True)):
     d, src = resolve(job, file)
     out = out_path(d, ".png", stem="sprite")
     guard(gifme.sprite_sheet, str(src), str(out), columns=columns, padding=padding,
-          background=background)
+          background=background, preserve_transparency=preserve_transparency)
     return result(d, out)
 
 

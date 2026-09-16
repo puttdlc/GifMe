@@ -84,14 +84,15 @@
 
 <section id="ws-empty">
   <div id="ws-drop" class="dropzone">
-    <strong>Drop a GIF, image or video here</strong>
-    <span class="hint">or <label class="link" for="ws-file">choose a file</label> - every tool below
-      then works on it. Pick "Set as input" on a result to keep editing it.</span>
+    <strong>Drop, paste or choose a GIF, image or video</strong>
+    <span class="hint"><label class="link" for="ws-file">choose a file</label>, drop one anywhere
+      on the page, or paste one straight from your clipboard - every tool below then works on it.
+      Pick "Set as input" on a result to keep editing it.</span>
     <input type="file" id="ws-file" accept="image/*,video/*" hidden>
   </div>
   <div id="ws-url-row" class="url-row">
     <span class="hint">Alternatively, paste a link</span>
-    <input type="url" id="ws-url" placeholder="https://example.com/file.gif">
+    <input type="url" id="ws-url" placeholder="https://example.com/file.gif" data-no-reset>
     <button id="ws-url-load" type="button" class="ghost">Load</button>
   </div>
 </section>
@@ -106,12 +107,13 @@
 
     <div id="maker-drop" class="dropzone small">
       <strong>+ Upload frames</strong>
-      <span class="hint">images, a .zip of images, a GIF, or a video</span>
+      <span class="hint">images, a .zip of images, a GIF, or a video - drop them anywhere on the
+        page, or paste from your clipboard</span>
       <input type="file" id="maker-files" accept="image/*,video/*,.zip" multiple hidden>
     </div>
     <div id="maker-url-row" class="url-row">
       <span class="hint">Alternatively, paste a link</span>
-      <input type="url" id="maker-url" placeholder="https://example.com/frame.gif">
+      <input type="url" id="maker-url" placeholder="https://example.com/frame.gif" data-no-reset>
       <button id="maker-url-load" type="button" class="ghost">Load</button>
     </div>
 
@@ -257,10 +259,10 @@
     <div id="crop-stage" class="stage"></div>
     <form class="tool-form" data-endpoint="/api/crop" data-label="Cropped">
       <div class="line">
-        <label>X <input type="number" name="x" id="crop-x" value="0"></label>
-        <label>Y <input type="number" name="y" id="crop-y" value="0"></label>
-        <label>Width <input type="number" name="w" id="crop-w" value="0"></label>
-        <label>Height <input type="number" name="h" id="crop-h" value="0"></label>
+        <label>X <input type="number" name="x" id="crop-x" value="0" data-no-reset></label>
+        <label>Y <input type="number" name="y" id="crop-y" value="0" data-no-reset></label>
+        <label>Width <input type="number" name="w" id="crop-w" value="0" data-no-reset></label>
+        <label>Height <input type="number" name="h" id="crop-h" value="0" data-no-reset></label>
         <label>Aspect ratio
           <select id="crop-ratio">
             <option value="free">Free</option>
@@ -499,10 +501,10 @@
     <div id="censor-stage" class="stage"></div>
     <form class="tool-form" data-endpoint="/api/censor" data-label="Censored">
       <div class="line">
-        <label>X <input type="number" name="x" id="censor-x" value="0"></label>
-        <label>Y <input type="number" name="y" id="censor-y" value="0"></label>
-        <label>Width <input type="number" name="w" id="censor-w" value="0"></label>
-        <label>Height <input type="number" name="h" id="censor-h" value="0"></label>
+        <label>X <input type="number" name="x" id="censor-x" value="0" data-no-reset></label>
+        <label>Y <input type="number" name="y" id="censor-y" value="0" data-no-reset></label>
+        <label>Width <input type="number" name="w" id="censor-w" value="0" data-no-reset></label>
+        <label>Height <input type="number" name="h" id="censor-h" value="0" data-no-reset></label>
       </div>
       <div class="line">
         <label>Mode
@@ -627,6 +629,7 @@
           <option value="drop">Drop every N-th frame</option>
           <option value="transparency">Optimize transparency</option>
           <option value="colormap">Eliminate local colour tables</option>
+          <option value="temporal">Temporal dithering + pixel delta</option>
           <option value="combined">All combined (lossy + colour + transparency)</option>
           <option value="auto">(Automated) Target Size</option>
         </select>
@@ -634,8 +637,12 @@
       <div class="line">
         <label class="slider opt-field" data-methods="lossy,combined">Compression level <output></output>
           <input type="range" name="lossy" min="0" max="200" value="30"></label>
-        <label class="opt-field" data-methods="colors,colormap,combined">Max colours <input type="number" name="colors" placeholder="keep" min="2" max="256" value="128">
+        <label class="opt-field" data-methods="colors,colormap,combined,temporal">Max colours <input type="number" name="colors" placeholder="keep" min="2" max="256" value="128">
           <span class="hint">(0-256; blank = keep all)</span></label>
+        <label class="slider opt-field" data-methods="temporal">Dither strength <output></output>
+          <input type="range" name="temporal_strength" min="0" max="64" value="24"></label>
+        <label class="slider opt-field" data-methods="temporal">Delta tolerance <output></output>
+          <input type="range" name="delta_threshold" min="0" max="48" value="6"></label>
         <label class="opt-field" data-methods="auto">Target size (MB) <input type="number" name="target_mb" min="0.05" step="0.05" value="1"></label>
       </div>
       <div class="line">
@@ -644,11 +651,13 @@
             <option value="3" selected>3 (best)</option></select></label>
         <label class="opt-field" data-methods="drop">Drop every <input type="number" name="drop_every" placeholder="2" min="2"></label>
         <label class="check opt-field" data-methods="colors,colormap,combined"><input type="checkbox" name="dither" checked> dither</label>
-        <label class="check opt-field" data-methods="drop,transparency,colormap,combined"><input type="checkbox" name="preserve_transparency" checked> preserve transparency</label>
+        <label class="check opt-field" data-methods="drop,transparency,colormap,combined,temporal"><input type="checkbox" name="preserve_transparency" checked> preserve transparency</label>
+        <label class="check opt-field" data-methods="temporal"><input type="checkbox" name="no_stack" checked> do not stack frames</label>
       </div>
       <div class="opt-field auto-use" data-methods="auto">
         <span class="auto-use-label">Use:</span>
         <label class="check"><input type="checkbox" name="use_lossy" value="lossy" checked> Lossy compression</label>
+        <label class="check"><input type="checkbox" name="use_temporal" value="temporal" checked> Temporal dithering + delta</label>
         <label class="check"><input type="checkbox" name="use_colors" value="colors" checked> Colour reduction</label>
         <label class="check"><input type="checkbox" name="use_colormap" value="colormap" checked> Local colour tables</label>
         <label class="check"><input type="checkbox" name="use_drop" value="drop" checked> Frame dropping</label>
@@ -697,6 +706,7 @@
         <label>Padding <input type="number" name="padding" value="0" min="0"></label>
         <label>Background <input type="color" name="background" value="#000000"></label>
       </div>
+      <label class="check"><input type="checkbox" name="preserve_transparency" checked> preserve transparency</label>
       <p class="hint">Lays every frame out on one PNG. Leave columns blank for a square grid.</p>
       <button type="submit" class="primary">Create sprite sheet</button>
     </form>

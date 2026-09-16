@@ -420,6 +420,126 @@ button.ghost:hover, .button.ghost:hover { background: #2b3341; color: var(--text
 }
 .swatch-remove:hover { background: var(--danger); color: #fff; }
 
+/* ---------- page-wide drop indicator ---------- */
+
+/* Dragging a file anywhere over the page shows this, so it's obvious a
+   drop will land somewhere useful even nowhere near one of the small boxes
+   - see initGlobalDrop() in app.js for why that's the point. A pseudo
+   -element instead of a real node: nothing to create/insert/remove, just
+   one class toggled on <body>. */
+body.page-drop-active::after {
+  content: "Drop to upload";
+  position: fixed; inset: 12px; z-index: 950;
+  display: flex; align-items: center; justify-content: center;
+  border: 3px dashed var(--accent); border-radius: 16px;
+  background: #10131acc; color: var(--text); font-size: 20px; font-weight: 600;
+  pointer-events: none;
+}
+
+/* ---------- reset-to-default buttons ---------- */
+
+/* Wraps a plain typeable field (see wireField in reset.js) so its button
+   sits right next to it on the same line, regardless of the field's own
+   block-level CSS. */
+.field-reset { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; }
+.field-reset input, .field-reset textarea { flex: 1 1 auto; min-width: 0; }
+/* Keeps its fixed swatch size instead of being squeezed by the flex row.
+   The explicit width (not the base rule's 100%) matters: a percentage
+   width on a flex:none child of a shrink-to-fit inline-flex container
+   makes Chrome size the container as if that child weren't there at all,
+   while the child itself still paints at its full size and overflows it. */
+.field-reset input[type=color] { flex: none; width: 60px; }
+/* Textarea's button aligns to its top line instead of the middle of its
+   whole (multi-row) height. */
+.field-reset.top { align-items: flex-start; }
+.field-reset.top .reset-btn { margin-top: 4px; }
+
+.reset-btn {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; padding: 0; margin: 4px 0 0;
+  background: transparent; border: none; color: var(--muted);
+  border-radius: 50%; cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.reset-btn:hover { background: #2b3341; color: var(--text); }
+.reset-btn:active { color: var(--accent); }
+.reset-btn svg { display: block; }
+/* A slider's button sits inline right after its <output>/typed box, on the
+   label's text line rather than a margin meant for the field below it. */
+label.slider .reset-btn { margin: 0 0 0 2px; vertical-align: middle; }
+
+/* ---------- expand / fullscreen preview ---------- */
+
+/* Host elements gain relative positioning so their expand button (top
+   right) is placed against them specifically, not the page. */
+.expand-host { position: relative; }
+.expand-btn {
+  position: absolute; top: 8px; right: 8px; z-index: 5;
+  width: 30px; height: 30px; padding: 0; margin: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #171b22d9; border: 1px solid var(--border); color: var(--text);
+  border-radius: 8px; cursor: pointer;
+  transition: background .15s ease, color .15s ease, transform .15s ease;
+}
+.expand-btn:hover { background: var(--accent-strong); color: #fff; }
+.expand-btn:active { transform: scale(.94); }
+.expand-btn svg { display: block; }
+
+body.expand-lock { overflow: hidden; }
+
+#expand-overlay {
+  position: fixed; inset: 0; z-index: 900;
+  display: flex; align-items: center; justify-content: center;
+  padding: 56px 24px;
+  background: rgba(10, 13, 18, 0);
+  opacity: 0; pointer-events: none;
+  transition: background-color .22s ease, opacity .22s ease;
+}
+#expand-overlay.open {
+  background: rgba(10, 13, 18, .92);
+  opacity: 1; pointer-events: auto;
+}
+/* The moved node itself eases in/out with a touch of scale, on top of the
+   backdrop fading - what makes the transition read as smooth rather than
+   an instant jump to fullscreen. */
+#expand-overlay > .expand-open {
+  transform: scale(.96); opacity: 0;
+  transition: transform .22s ease, opacity .22s ease;
+}
+#expand-overlay.open > .expand-open { transform: scale(1); opacity: 1; }
+
+/* Every expandable stage caps itself to the padded overlay area while
+   keeping its own aspect ratio - each rule below only overrides the one
+   normal-flow constraint (a fixed thumb size, or a max-height meant for an
+   inline preview) that would otherwise fight a fullscreen layout. */
+#expand-overlay #ws-thumb {
+  max-width: 92vw; max-height: 92vh; padding: 0; margin: 0;
+}
+#expand-overlay #ws-thumb img, #expand-overlay #ws-thumb video {
+  width: auto; height: auto; max-width: 100%; max-height: 92vh;
+}
+#expand-overlay .media-frame {
+  display: flex; max-width: 92vw; max-height: 92vh;
+}
+#expand-overlay .media-frame img, #expand-overlay .media-frame video {
+  max-width: 100%; max-height: 92vh; width: auto; height: auto; margin: auto;
+}
+#expand-overlay .crop-stage { max-width: 92vw; }
+#expand-overlay .crop-stage img { max-height: 84vh; }
+#expand-overlay .bg-stage {
+  max-width: 94vw; max-height: 88vh; overflow: auto;
+}
+#expand-overlay .bg-canvas { max-height: 76vh; }
+
+@media (max-width: 640px) {
+  #expand-overlay { padding: 20px 14px; }
+  #expand-overlay .bg-stage { grid-template-columns: 1fr; }
+}
+
+@media (pointer: coarse) {
+  .expand-btn { width: 38px; height: 38px; }
+}
+
 /* ---------- results ---------- */
 
 #result { max-width: 1000px; margin: 24px auto 60px; padding: 0 24px; }
