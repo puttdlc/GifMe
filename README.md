@@ -33,7 +33,7 @@ Before running choosing options, git clone this project onto your machine.
 
 `cd` to any folder on your machine where you'd like this project folder to be created. Run:
 ```
-git clone https://github.com/puttdlc/GitMe.git
+git clone https://github.com/puttdlc/GifMe.git
 ```
 This should successfully clone this repo to your computer.
 ### Option A: Docker (recommended, identical on Windows/Linux/macOS)
