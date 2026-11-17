@@ -55,7 +55,7 @@ This may take a few seconds to build.
 
 ### Run it - Option B: natively (no Docker)
 
-You need Python 3.10+ and ffmpeg on your PATH. The other tools are optional —
+You need Python 3.10+ and ffmpeg on your PATH. The other tools are optional:
 the app starts without them and says which features are unavailable.
 
 **macOS:**
