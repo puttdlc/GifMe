@@ -59,21 +59,29 @@ def _probe_image(p: Path, per_frame: bool) -> dict:
         # alpha channel (what an RGBA PNG/WebP - say, one the Remove
         # Background tab just wrote - carries instead).
         info["transparency"] = "transparency" in im.info or im.mode in ("RGBA", "LA", "PA")
-        if im.format == "GIF":
-            tables = _gif_color_tables(p)
-            if tables:
-                info["color_tables"] = tables
-                info["colors"] = tables["global"]["colors"] or tables["local_colors_max"]
+        gif = _gif_structure(p) if im.format == "GIF" else None
+        if gif:
+            info["color_tables"] = gif["tables"]
+            info["colors"] = gif["tables"]["global"]["colors"] or gif["tables"]["local_colors_max"]
         if count == 1:
             info["duration_s"] = 0
             return info
         durations, detail = [], []
-        for i, fr in enumerate(ImageSequence.Iterator(im)):
-            d = fr.info.get("duration", 0) or 0
-            durations.append(d)
-            if per_frame:
-                detail.append({"index": i + 1, "delay_ms": d,
-                               "disposal": fr.info.get("disposal"), "size": list(fr.size)})
+        if gif and len(gif["frames"]) == count:
+            # Read straight off the raw blocks - iterating with Pillow
+            # instead would LZW-decode every frame just to learn its delay,
+            # and this runs after every single tool.
+            for i, fr in enumerate(gif["frames"]):
+                durations.append(fr["delay_ms"])
+                if per_frame:
+                    detail.append({"index": i + 1, **fr})
+        else:
+            for i, fr in enumerate(ImageSequence.Iterator(im)):
+                d = fr.info.get("duration", 0) or 0
+                durations.append(d)
+                if per_frame:
+                    detail.append({"index": i + 1, "delay_ms": d,
+                                   "disposal": fr.info.get("disposal"), "size": list(fr.size)})
         total = sum(durations)
         info["duration_s"] = round(total / 1000, 3)
         info["avg_delay_ms"] = round(total / max(1, len(durations)))
@@ -83,11 +91,13 @@ def _probe_image(p: Path, per_frame: bool) -> dict:
     return info
 
 
-def _gif_color_tables(p: Path) -> dict | None:
+def _gif_structure(p: Path) -> dict | None:
     """Walk the raw GIF89a structure (no LZW decoding needed) to report the
     global colour table's size and how many frames carry their own local
     colour table instead of relying on the global one - exactly what the
-    Optimize tab's "eliminate local colour tables" option targets."""
+    Optimize tab's "eliminate local colour tables" option targets - plus
+    each frame's delay, disposal and size from its Graphic Control
+    Extension and image descriptor."""
     try:
         data = p.read_bytes()
     except OSError:
@@ -101,11 +111,16 @@ def _gif_color_tables(p: Path) -> dict | None:
     pos = 13 + (3 * gct_colors if gct_present else 0)
 
     n = len(data)
-    frame_count = 0
+    frames: list[dict] = []
     local_sizes: list[int] = []
+    # A Graphic Control Extension applies to the image that follows it.
+    delay_ms, disposal = 0, None
     while pos < n:
         marker = data[pos]
         if marker == 0x21:  # extension block - introducer + label, then sub-blocks
+            if pos + 6 < n and data[pos + 1] == 0xF9 and data[pos + 2] >= 4:
+                disposal = (data[pos + 3] >> 2) & 0x07
+                delay_ms = (data[pos + 4] | (data[pos + 5] << 8)) * 10
             pos += 2
             while pos < n:
                 size = data[pos]
@@ -114,9 +129,14 @@ def _gif_color_tables(p: Path) -> dict | None:
                     break
                 pos += size
         elif marker == 0x2C:  # image descriptor
-            frame_count += 1
             if pos + 10 > n:
                 break
+            frames.append({
+                "delay_ms": delay_ms,
+                "disposal": disposal,
+                "size": [data[pos + 5] | (data[pos + 6] << 8), data[pos + 7] | (data[pos + 8] << 8)],
+            })
+            delay_ms, disposal = 0, None
             ipacked = data[pos + 9]
             pos += 10
             if ipacked & 0x80:
@@ -134,9 +154,12 @@ def _gif_color_tables(p: Path) -> dict | None:
             break
 
     return {
-        "global": {"present": gct_present, "colors": gct_colors},
-        "local_frame_count": len(local_sizes),
-        "local_colors_max": max(local_sizes) if local_sizes else None,
+        "tables": {
+            "global": {"present": gct_present, "colors": gct_colors},
+            "local_frame_count": len(local_sizes),
+            "local_colors_max": max(local_sizes) if local_sizes else None,
+        },
+        "frames": frames,
     }
 
 

@@ -397,6 +397,9 @@ def auto_target_size(src: str, dst: str, target_bytes: int, ignore: set[str] | N
 
     best_path: Path | None = None
     stall = 0
+    # Scopes this run's scratch files, so the cleanup below can't delete an
+    # attempt that another run on the same job is still writing.
+    run_tag = uuid.uuid4().hex[:6]
 
     for offset, (label, params) in enumerate(remaining, start=1):
         i = resume_from + offset
@@ -409,7 +412,7 @@ def auto_target_size(src: str, dst: str, target_bytes: int, ignore: set[str] | N
                   "resumable": i - 1 < total, "stopped": True}
             break
 
-        attempt = dst_path.parent / f"_auto_{uuid.uuid4().hex[:8]}.gif"
+        attempt = dst_path.parent / f"_auto_{run_tag}_{uuid.uuid4().hex[:8]}.gif"
         ok, error, size = True, None, None
         try:
             optimize_gif(str(src_path), str(attempt), lossy=params.get("lossy", 0),
@@ -449,5 +452,5 @@ def auto_target_size(src: str, dst: str, target_bytes: int, ignore: set[str] | N
         shutil.move(str(best_path), dst)
     else:
         shutil.copy(str(fallback_path), dst)
-    for leftover in dst_path.parent.glob("_auto_*.gif"):
+    for leftover in dst_path.parent.glob(f"_auto_{run_tag}_*.gif"):
         leftover.unlink(missing_ok=True)

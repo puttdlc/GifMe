@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in · GIFMe</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="login-page">
+<header>
+  <div class="title-group">
+    <h1>GIFMe</h1>
+  </div>
+</header>
+
+<main class="login-main">
+  <form class="login-card" id="login-form" method="post" action="/api/login">
+    <h2>Sign in</h2>
+    <p class="hint">Enter the username and password set for this server.</p>
+
+    <label>Username
+      <input id="username" name="username" type="text" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" required autofocus>
+    </label>
+    <label>Password
+      <span class="login-pw">
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <button type="button" class="ghost small" id="reveal" aria-pressed="false" aria-label="Show password">Show</button>
+      </span>
+    </label>
+
+    <p class="login-err" id="login-err" role="alert" hidden></p>
+
+    <button type="submit" class="primary big" id="login-btn">Sign in</button>
+    <p class="hint login-foot">You'll stay signed in on this device for 30 days.</p>
+  </form>
+</main>
+<script src="/js/login.js"></script>
+</body>
+</html>

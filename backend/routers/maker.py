@@ -11,7 +11,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 import gifme
 from jobs import (IMAGE_SUFFIXES, download_url, guard, job_dir, new_job, out_path, read_state,
-                  resolve, result, safe_name, save_upload, write_state)
+                  resolve, result, safe_name, save_upload, update_state)
 
 router = APIRouter(prefix="/api")
 
@@ -115,9 +115,7 @@ def _finish_load(d: Path, existing: list[dict], new: list[dict], sort: str) -> d
     for i, f in enumerate(frames):
         f["index"] = i + 1
 
-    state = read_state(d)
-    state["frames"] = frames
-    write_state(d, state)
+    update_state(d, lambda state: state.__setitem__("frames", frames))
     return {"job": d.name, "frames": frames}
 
 

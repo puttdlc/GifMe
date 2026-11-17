@@ -7,9 +7,9 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
 import gifme
-from jobs import (clear_workdir, download_url, file_url, guard, job_dir, latest_current_file,
-                  new_job, open_workdir, read_state, resolve, set_current, workdir_stats,
-                  write_state)
+from jobs import (clear_workdir, download_url, file_url, guard_quick, inside, job_dir,
+                  latest_current_file, new_job, open_workdir, read_state, resolve, set_current,
+                  update_state, workdir_stats)
 
 router = APIRouter(prefix="/api")
 
@@ -26,12 +26,12 @@ def workdir_info():
 
 @router.post("/workdir/open")
 def workdir_open():
-    return guard(open_workdir)
+    return guard_quick(open_workdir)
 
 
 @router.post("/workdir/clear")
 def workdir_clear(keep_job: str = Form(None)):
-    guard(clear_workdir, keep=keep_job)
+    guard_quick(clear_workdir, keep=keep_job)
     return workdir_stats()
 
 
@@ -42,11 +42,14 @@ def fonts():
 
 @router.get("/file/{job}/{name:path}")
 def serve_file(job: str, name: str):
-    d = job_dir(job)
-    p = (d / name).resolve()
-    if not str(p).startswith(str(d.resolve())) or not p.exists():
+    p = inside(job_dir(job), name)
+    if p is None:
         raise HTTPException(404, "not found")
-    return FileResponse(p, filename=p.name)
+    # Every file a job writes gets a fresh name (see jobs.out_path), so a
+    # URL's content never changes - safe to cache for good, which saves the
+    # preview re-downloading a large GIF on every re-render.
+    return FileResponse(p, filename=p.name,
+                        headers={"Cache-Control": "private, max-age=31536000, immutable"})
 
 
 @router.post("/upload")
@@ -57,7 +60,7 @@ def upload(file: UploadFile = File(...), job: str = Form(None)):
         "name": src.name,
         "url": file_url(d, src.name),
         "size_bytes": src.stat().st_size,
-        "meta": guard(gifme.analyze, str(src), True),
+        "meta": guard_quick(gifme.analyze, str(src), True),
     }
 
 
@@ -69,21 +72,21 @@ def upload_url(url: str = Form(...), job: str = Form(None)):
     if not url:
         raise HTTPException(400, "please paste a URL first")
     d = job_dir(job) if job else new_job()
-    src = guard(download_url, url, d)
+    src = guard_quick(download_url, url, d)
     set_current(d, src.name)
     return {
         "job": d.name,
         "name": src.name,
         "url": file_url(d, src.name),
         "size_bytes": src.stat().st_size,
-        "meta": guard(gifme.analyze, str(src), True),
+        "meta": guard_quick(gifme.analyze, str(src), True),
     }
 
 
 @router.post("/analyze")
 def analyze(file: UploadFile = File(None), job: str = Form(None)):
     _d, src = resolve(job, file)
-    return JSONResponse(guard(gifme.analyze, str(src), True))
+    return JSONResponse(guard_quick(gifme.analyze, str(src), True))
 
 
 @router.get("/workdir/latest")
@@ -103,7 +106,7 @@ def workdir_latest():
         "name": name,
         "url": file_url(d, name),
         "size_bytes": p.stat().st_size,
-        "meta": guard(gifme.analyze, str(p), True),
+        "meta": guard_quick(gifme.analyze, str(p), True),
     }
 
 
@@ -111,8 +114,8 @@ def workdir_latest():
 def set_input(job: str = Form(...), name: str = Form(...)):
     """Adopt a tool's output as the job's working file, so later tools build on it."""
     d = job_dir(job)
-    p = (d / name).resolve()
-    if not str(p).startswith(str(d.resolve())) or not p.exists():
+    p = inside(d, name)
+    if p is None:
         raise HTTPException(404, "not found")
     set_current(d, name)
     return {
@@ -120,7 +123,7 @@ def set_input(job: str = Form(...), name: str = Form(...)):
         "name": name,
         "url": file_url(d, name),
         "size_bytes": p.stat().st_size,
-        "meta": guard(gifme.analyze, str(p), True),
+        "meta": guard_quick(gifme.analyze, str(p), True),
     }
 
 
@@ -128,10 +131,36 @@ def set_input(job: str = Form(...), name: str = Form(...)):
 def reset(job: str = Form(...)):
     """Go back to the file as it was uploaded."""
     d = job_dir(job)
-    state = read_state(d)
-    if not state.get("history"):
-        raise HTTPException(400, "nothing to reset")
-    first = state["history"][0]
-    state["current"] = first
-    write_state(d, state)
-    return {"job": d.name, "name": first, "url": file_url(d, first)}
+
+    def rewind(state):
+        if not state.get("history"):
+            raise HTTPException(400, "nothing to reset")
+        state["current"] = state["history"][0]
+
+    first = update_state(d, rewind)["current"]
+    p = d / first
+    return {
+        "job": d.name,
+        "name": first,
+        "url": file_url(d, first),
+        "size_bytes": p.stat().st_size,
+        "meta": guard_quick(gifme.analyze, str(p), True),
+    }
+
+
+@router.get("/job/{job}")
+def job_current(job: str):
+    """The job's current working file, in the same shape /upload returns -
+    lets the browser pick its session back up after a page refresh."""
+    d = job_dir(job)
+    current = read_state(d).get("current")
+    p = inside(d, current) if current else None
+    if p is None:
+        raise HTTPException(404, "that job has no working file")
+    return {
+        "job": d.name,
+        "name": current,
+        "url": file_url(d, current),
+        "size_bytes": p.stat().st_size,
+        "meta": guard_quick(gifme.analyze, str(p), True),
+    }

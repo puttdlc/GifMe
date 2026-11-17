@@ -3,13 +3,36 @@
 
 import { progressBusy, progressEnd, progressSet, progressStart } from './progress.js';
 
+// A 401 means the login session expired: go to the login page and come back
+// here afterwards. Every API call goes through post() or fetch(), so wrapping
+// fetch once covers the modules that call it directly.
+let signingOut = false;
+function checkSignedOut(status) {
+  if (status !== 401 || signingOut) return;
+  signingOut = true;
+  location.href = '/login?next=' + encodeURIComponent(location.pathname + location.search);
+}
+const nativeFetch = window.fetch.bind(window);
+window.fetch = async (...args) => {
+  const res = await nativeFetch(...args);
+  checkSignedOut(res.status);
+  return res;
+};
+
+export async function signOut() {
+  signingOut = true;
+  try { await nativeFetch('/api/logout', { method: 'POST' }); } catch { /* signed out either way */ }
+  location.href = '/login';
+}
+
 // Uses XMLHttpRequest rather than fetch so upload progress is observable
 // (fetch has no cross-browser way to report request-body progress) - that's
 // what drives the "Uploading… NN%" state on the global progress bar. Once
 // the upload finishes but before the response arrives, the bar switches to
-// an indeterminate "Processing…" state, since that's the server doing the
-// actual (potentially slow) ffmpeg/gifsicle/Pillow work.
-export function post(endpoint, fields = {}, files = {}) {
+// an indeterminate state labelled with whatever the caller actually
+// triggered ("Removing background…", "Building GIF…") - not a generic
+// "Processing…" - so it's clear what's running, not just that something is.
+export function post(endpoint, fields = {}, files = {}, progressLabel = 'Processing…') {
   const fd = new FormData();
   for (const [k, v] of Object.entries(fields)) {
     if (v === undefined || v === null || v === '') continue;
@@ -31,19 +54,20 @@ export function post(endpoint, fields = {}, files = {}) {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', endpoint);
 
-    progressStart(hasFiles ? 'Uploading…' : 'Processing…');
-    if (!hasFiles) progressBusy('Processing…');
+    progressStart(hasFiles ? 'Uploading…' : progressLabel);
+    if (!hasFiles) progressBusy(progressLabel);
 
     xhr.upload.addEventListener('progress', (e) => {
       if (!hasFiles || !e.lengthComputable) return;
       progressSet(e.loaded / e.total, `Uploading… ${Math.round((e.loaded / e.total) * 100)}%`);
     });
     xhr.upload.addEventListener('load', () => {
-      if (hasFiles) progressBusy('Processing…');
+      if (hasFiles) progressBusy(progressLabel);
     });
 
     xhr.addEventListener('load', () => {
       progressEnd();
+      checkSignedOut(xhr.status);
       let body = {};
       try { body = JSON.parse(xhr.responseText || '{}'); } catch { /* non-JSON error page */ }
       if (xhr.status >= 200 && xhr.status < 300) resolve(body);

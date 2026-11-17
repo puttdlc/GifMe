@@ -6,11 +6,12 @@ import shutil
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
 import gifme
-from jobs import file_url, guard, new_job, out_path, resolve, result, save_upload, suffix_of
+from jobs import (file_url, guard, inside, job_slots, new_job, out_path, resolve, result,
+                  save_upload, suffix_of)
 
 router = APIRouter(prefix="/api")
 
@@ -51,10 +52,10 @@ def optimize(file: UploadFile = File(None), job: str = Form(None),
 
 
 @router.post("/optimize/auto")
-async def optimize_auto(file: UploadFile = File(None), job: str = Form(None),
-                        target_mb: float = Form(1.0), ignore: str = Form(""),
-                        resume_from: int = Form(0), baseline_name: str = Form(None),
-                        force_steps: int = Form(0), run_id: str = Form(None)):
+def optimize_auto(file: UploadFile = File(None), job: str = Form(None),
+                  target_mb: float = Form(1.0), ignore: str = Form(""),
+                  resume_from: int = Form(0), baseline_name: str = Form(None),
+                  force_steps: int = Form(0), run_id: str = Form(None)):
     """The "(Automated) Target Size" method: streams one JSON line per attempt
     as gifme.auto_target_size works through its ladder of strategies, so the
     UI can show live progress instead of blocking until the whole run ends.
@@ -70,10 +71,17 @@ async def optimize_auto(file: UploadFile = File(None), job: str = Form(None),
     before = src.stat().st_size
     target_bytes = max(1024, int(target_mb * 1024 * 1024))
     ignored = {c.strip() for c in ignore.split(",") if c.strip()}
-    baseline_path = str(d / baseline_name) if baseline_name else None
+    baseline_path = None
+    if baseline_name:
+        baseline = inside(d, baseline_name)
+        if baseline is None:
+            raise HTTPException(404, "the earlier run's result is gone - start a fresh run")
+        baseline_path = str(baseline)
 
     def stream():
         last = None
+        # Held for the whole run - it's one long engine job, see jobs.guard.
+        job_slots.acquire()
         try:
             for progress in gifme.auto_target_size(
                     str(src), str(out), target_bytes, ignore=ignored, resume_from=resume_from,
@@ -85,6 +93,7 @@ async def optimize_auto(file: UploadFile = File(None), job: str = Form(None),
             yield json.dumps({"done": True, "error": str(e)}) + "\n"
             return
         finally:
+            job_slots.release()
             if run_id:
                 _STOP_REQUESTS.discard(run_id)
 

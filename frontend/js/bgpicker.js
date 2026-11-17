@@ -320,9 +320,8 @@ export function createBgPicker(container, { onPick } = {}) {
             + 'or a GIF.');
           resolve(false);
         };
-        // Cache-busted the way every other preview in the app is, so a result
-        // promoted to the input doesn't show the file it replaced.
-        img.src = `${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`;
+        // No cache-buster needed: a promoted result has its own filename.
+        img.src = url;
       });
     },
 

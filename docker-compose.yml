@@ -12,7 +12,7 @@ services:
       # you run `docker compose up`; override it if that's not accurate.
       - HOST_WORKDIR=${PWD}/backend/workdir
       # Self-hosting past localhost: see README "Self-Host" for details.
-      # Set both to require HTTP Basic auth; leave unset for no auth.
+      # Set both to require signing in; leave unset for no auth.
       - GIFME_USERNAME=${GIFME_USERNAME:-}
       - GIFME_PASSWORD=${GIFME_PASSWORD:-}
       # Reject uploads over this size (MB). 0 = unlimited.

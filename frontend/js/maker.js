@@ -93,18 +93,18 @@ export async function loadFrames(fileList, input) {
   if (!fileList?.length) return;
   await withBusy($('#maker-add'), async () => {
     const r = await post('/api/frames/load', { job: job || '', sort: 'name' },
-                         { files: fileList });
+                         { files: fileList }, 'Loading frames…');
     applyLoadedFrames(r);
-  });
+  }, 'Loading frames…');
   if (input) input.value = '';
 }
 
 async function loadFramesFromUrl(url) {
   return withBusy($('#maker-url-load'), async () => {
-    const r = await post('/api/frames/load-url', { job: job || '', sort: 'name', url });
+    const r = await post('/api/frames/load-url', { job: job || '', sort: 'name', url }, {}, 'Fetching frames…');
     applyLoadedFrames(r);
     return r;
-  });
+  }, 'Fetching frames…');
 }
 
 // Still images take their delay from the GIF options field; frames pulled out
@@ -131,7 +131,7 @@ async function loadCurrentInput() {
     const blob = await res.blob();
     const file = new File([blob], state.name, { type: blob.type });
     await loadFrames([file]);
-  });
+  }, 'Loading current file…');
 }
 
 function clearFrames() {
@@ -246,7 +246,7 @@ async function build(button) {
     height: Number($('#gif-height').value) || 0,
   };
   await withBusy(button, async () => {
-    const r = await post('/api/gif/build', { job, payload: JSON.stringify(payload) });
+    const r = await post('/api/gif/build', { job, payload: JSON.stringify(payload) }, {}, 'Building GIF…');
     showResult(r, 'GIF created');
-  });
+  }, 'Building GIF…');
 }

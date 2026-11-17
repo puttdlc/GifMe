@@ -14,10 +14,31 @@ def change_speed(src: str, dst: str, factor: float,
         raise ToolError("speed factor must be greater than 0")
     if kind_of(src) in ("gif", "animation"):
         frames, delays, loop = load_frames(src)
-        save_gif(frames, [max(MIN_DELAY_MS, round(d / factor)) for d in delays], dst, loop=loop,
-                 preserve_transparency=preserve_transparency)
+        frames, delays = _merge_short_frames(frames, [d / factor for d in delays])
+        save_gif(frames, delays, dst, loop=loop, preserve_transparency=preserve_transparency)
         return
     run(["ffmpeg", "-y", "-i", src, "-vf", f"setpts={1 / factor}*PTS", dst])
+
+
+def _merge_short_frames(frames: list, delays: list[float]) -> tuple[list, list[int]]:
+    """Past MIN_DELAY_MS a GIF can't go any faster by shortening delays, so
+    keep speeding up by dropping frames instead: a frame too short to show
+    on its own absorbs the next one's time, keeping total length exact."""
+    out_f, out_d = [], []
+    for f, d in zip(frames, delays):
+        if out_d and out_d[-1] < MIN_DELAY_MS:
+            out_d[-1] += d
+            continue
+        out_f.append(f)
+        out_d.append(d)
+    # GIF stores delays in whole centiseconds; carry each frame's rounding
+    # error into the next so the total length doesn't drift.
+    whole, carry = [], 0.0
+    for d in out_d:
+        cs = max(MIN_DELAY_MS // 10, round((d + carry) / 10))
+        carry += d - cs * 10
+        whole.append(cs * 10)
+    return out_f, whole
 
 
 def set_delay(src: str, dst: str, delay_ms: int | None = None,

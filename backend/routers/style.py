@@ -4,7 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter, File, Form, UploadFile
 
 import gifme
-from jobs import guard, out_path, resolve, result, save_upload, suffix_of
+from jobs import guard, guard_quick, out_path, resolve, result, save_upload, suffix_of
 
 router = APIRouter(prefix="/api")
 
@@ -87,7 +87,7 @@ def remove_background(file: UploadFile = File(None), job: str = Form(None),
     picks how - see gifme.bgremove.FEATHER_MODES.
     """
     d, src = resolve(job, file)
-    fmt = guard(gifme.resolve_bg_target, str(src), target)
+    fmt = guard_quick(gifme.resolve_bg_target, str(src), target)
     out = out_path(d, gifme.bg_output_suffix(fmt), stem="nobg")
     guard(gifme.remove_background, str(src), str(out), colors, threshold=threshold,
           clamp=clamp, target=fmt, magic=magic, points=points, feather=feather,

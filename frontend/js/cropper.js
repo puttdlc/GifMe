@@ -174,7 +174,7 @@ export function createCropper(container, onChange) {
         return;
       }
       const wrap = el('div', { class: 'crop-stage' });
-      img = el('img', { src: `${url}?t=${Date.now()}`, alt: name || 'preview' });
+      img = el('img', { src: url, alt: name || 'preview' });
       box = el('div', { class: 'crop-box', tabindex: '0', hidden: '' },
         ...DIRS.map(d => el('span', { class: `crop-handle ${d}`, 'data-dir': d })));
       box.addEventListener('pointerdown', onDown);

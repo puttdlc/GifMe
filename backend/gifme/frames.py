@@ -17,7 +17,9 @@ from .probe import kind_of
 from .runner import ffmpeg_threads, run
 
 DEFAULT_DELAY_MS = 100
-MIN_DELAY_MS = 10
+# Browsers clamp any GIF delay under 20ms (2cs) up to ~100ms, so a 10ms
+# frame plays five times *slower* than 20ms - 20 is the fastest that's real.
+MIN_DELAY_MS = 20
 
 
 def load_frames(path: str | Path) -> tuple[list[Image.Image], list[int], int]:

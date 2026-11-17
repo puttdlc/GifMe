@@ -37,6 +37,14 @@
       <button id="health" type="button"></button>
       <div id="health-panel" hidden></div>
     </div>
+    <button id="sign-out" type="button" class="ghost icon-btn" hidden title="Sign out" aria-label="Sign out">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 4H5v16h9" />
+        <path d="M10 12h11" />
+        <path d="M17 8l4 4-4 4" />
+      </svg>
+    </button>
   </div>
 </header>
 
@@ -85,8 +93,8 @@
 <section id="ws-empty">
   <div id="ws-drop" class="dropzone">
     <strong>Drop, paste or choose a GIF, image or video</strong>
-    <span class="hint"><label class="link" for="ws-file">choose a file</label>, drop one anywhere
-      on the page, or paste one straight from your clipboard - every tool below then works on it.
+    <span class="hint">You can <label class="link" for="ws-file">choose a file</label>, drop one anywhere
+      on the page, or paste one straight from your clipboard — every tool below then works on it.
       Pick "Set as input" on a result to keep editing it.</span>
     <input type="file" id="ws-file" accept="image/*,video/*" hidden>
   </div>
@@ -150,7 +158,7 @@
       <fieldset>
         <legend>GIF options:</legend>
         <div class="line">
-          <label>Delay time: <input type="number" id="gif-delay" value="20" min="1"></label>
+          <label>Delay time: <input type="number" id="gif-delay" value="20" min="2"></label>
           <label>Framerate (FPS): <input type="number" id="gif-fps" value="5" min="0.01" step="0.01"></label>
           <span class="hint">(delay in 1/100 of second; the two fields follow each other, and
             changing either resets the delay for all frames)</span>
@@ -188,7 +196,7 @@
         <legend>Effects:</legend>
         <label class="check"><input type="checkbox" id="fx-crossfade"> crossfade frames</label>
         <div id="crossfade-options" class="sub" hidden>
-          <label>Fader delay: <input type="number" id="fx-fade-delay" value="6" min="1"></label>
+          <label>Fader delay: <input type="number" id="fx-fade-delay" value="6" min="2"></label>
           <label>Framerate (FPS): <input type="number" id="fx-fade-fps" value="16.67" min="0.01" step="0.01"></label>
           <label>Fader frames: <input type="number" id="fx-fade-steps" value="5" min="1" max="30"></label>
         </div>
@@ -209,7 +217,7 @@
   <!-- ================= Video to GIF ================= -->
   <section class="panel" id="panel-video">
     <h2>Video to GIF</h2>
-    <form class="tool-form" data-endpoint="/api/video-to-gif" data-label="GIF created">
+    <form class="tool-form" data-endpoint="/api/video-to-gif" data-label="GIF created" data-progress="Converting video to GIF…">
       <input type="file" accept="video/*">
       <div class="line">
         <label>Start time (s) <input type="number" name="start" value="0" step="0.1"></label>
@@ -229,7 +237,7 @@
   <!-- ================= Resize ================= -->
   <section class="panel" id="panel-resize">
     <h2>Resize</h2>
-    <form class="tool-form" data-endpoint="/api/resize" data-label="Resized">
+    <form class="tool-form" data-endpoint="/api/resize" data-label="Resized" data-progress="Resizing…">
       <div class="line">
         <label>Width <input type="number" name="width" placeholder="auto"></label>
         <label>Height <input type="number" name="height" placeholder="auto"></label>
@@ -257,7 +265,7 @@
   <section class="panel" id="panel-crop">
     <h2>Crop</h2>
     <div id="crop-stage" class="stage"></div>
-    <form class="tool-form" data-endpoint="/api/crop" data-label="Cropped">
+    <form class="tool-form" data-endpoint="/api/crop" data-label="Cropped" data-progress="Cropping…">
       <div class="line">
         <label>X <input type="number" name="x" id="crop-x" value="0" data-no-reset></label>
         <label>Y <input type="number" name="y" id="crop-y" value="0" data-no-reset></label>
@@ -304,21 +312,22 @@
   <!-- ================= Speed ================= -->
   <section class="panel" id="panel-speed">
     <h2>Speed</h2>
-    <form class="tool-form" data-endpoint="/api/speed" data-label="Speed changed">
+    <form class="tool-form" data-endpoint="/api/speed" data-label="Speed changed" data-progress="Changing speed…">
       <label>Speed factor <input type="number" name="factor" id="speed-factor" value="1" step="0.1" min="0.1"></label>
       <p class="hint" id="speed-hint"></p>
       <p class="hint">2 = twice as fast, 0.5 = half speed. Per-frame delays are scaled, so
-        uneven timing is preserved.</p>
+        uneven timing is preserved. Browsers won't play a GIF frame faster than 20ms, so
+        past that point frames are merged instead (same total length, fewer frames).</p>
       <div class="line">
         <label>…or one delay for every frame - Delay time (ms)
-          <input type="number" name="delay_ms" id="speed-delay" min="1" placeholder="e.g. 100"></label>
+          <input type="number" name="delay_ms" id="speed-delay" min="20" placeholder="e.g. 100"></label>
         <label>Framerate (FPS)
           <input type="number" name="fps" id="speed-fps" min="0.01" step="0.01" placeholder="e.g. 10"></label>
       </div>
       <label class="check"><input type="checkbox" name="preserve_transparency" checked> preserve transparency</label>
       <button type="submit" class="primary">Apply</button>
     </form>
-    <form class="tool-form" data-endpoint="/api/loop" data-label="Loop count set">
+    <form class="tool-form" data-endpoint="/api/loop" data-label="Loop count set" data-progress="Setting loop count…">
       <fieldset>
         <legend>Loop count</legend>
         <div class="line">
@@ -334,7 +343,7 @@
   <!-- ================= Cut ================= -->
   <section class="panel" id="panel-cut">
     <h2>Cut / Trim</h2>
-    <form class="tool-form" data-endpoint="/api/cut" data-label="Trimmed">
+    <form class="tool-form" data-endpoint="/api/cut" data-label="Trimmed" data-progress="Trimming…">
       <div class="line">
         <label>Start (s) <input type="number" name="start" value="0" step="0.1"></label>
         <label>End (s) <input type="number" name="end" placeholder="end" step="0.1"></label>
@@ -352,7 +361,7 @@
   <!-- ================= Reverse ================= -->
   <section class="panel" id="panel-reverse">
     <h2>Reverse</h2>
-    <form class="tool-form" data-endpoint="/api/reverse" data-label="Reversed">
+    <form class="tool-form" data-endpoint="/api/reverse" data-label="Reversed" data-progress="Reversing frames…">
       <p class="hint">Plays the frames back to front, keeping each frame's own delay.</p>
       <label class="check"><input type="checkbox" name="preserve_transparency" checked> preserve transparency</label>
       <button type="submit" class="primary">Reverse</button>
@@ -362,7 +371,7 @@
   <!-- ================= Effects ================= -->
   <section class="panel" id="panel-effects">
     <h2>Effects</h2>
-    <form class="tool-form" data-endpoint="/api/effect" data-label="Effect applied">
+    <form class="tool-form" data-endpoint="/api/effect" data-label="Effect applied" data-progress="Applying effect…">
       <label>Preset
         <select name="name">
           <option value="none">None (adjustments only)</option>
@@ -420,7 +429,7 @@
   <!-- ================= Add Text ================= -->
   <section class="panel" id="panel-text">
     <h2>Add Text</h2>
-    <form class="tool-form" data-endpoint="/api/text" data-label="Text added">
+    <form class="tool-form" data-endpoint="/api/text" data-label="Text added" data-progress="Adding text…">
       <label>Text <textarea name="text" rows="2">Hello!</textarea></label>
       <div class="line">
         <label>Position
@@ -464,7 +473,7 @@
   <!-- ================= Overlay ================= -->
   <section class="panel" id="panel-overlay">
     <h2>Overlay an image</h2>
-    <form class="tool-form" data-endpoint="/api/overlay" data-label="Overlay added">
+    <form class="tool-form" data-endpoint="/api/overlay" data-label="Overlay added" data-progress="Adding overlay…">
       <label>Image to overlay (logo, watermark, sticker)
         <input type="file" accept="image/*" data-extra="overlay_file"></label>
       <div class="line">
@@ -499,7 +508,7 @@
     <h2>Censor</h2>
     <p class="hint">Blur, pixelate or black out an area across every frame.</p>
     <div id="censor-stage" class="stage"></div>
-    <form class="tool-form" data-endpoint="/api/censor" data-label="Censored">
+    <form class="tool-form" data-endpoint="/api/censor" data-label="Censored" data-progress="Censoring…">
       <div class="line">
         <label>X <input type="number" name="x" id="censor-x" value="0" data-no-reset></label>
         <label>Y <input type="number" name="y" id="censor-y" value="0" data-no-reset></label>
@@ -532,7 +541,7 @@
 
     <div id="removebg-stage" class="stage"></div>
 
-    <form class="tool-form" data-endpoint="/api/remove-background" data-label="Background removed">
+    <form class="tool-form" data-endpoint="/api/remove-background" data-label="Background removed" data-progress="Removing background…">
       <!-- Filled in by the picker below: the chosen colours as a hex list, and one
            "x,y" fraction per colour (only meaningful, and only sent, in Magic Select). -->
       <input type="hidden" name="colors" id="removebg-colors">
@@ -621,7 +630,7 @@
   <!-- ================= Optimize ================= -->
   <section class="panel" id="panel-optimize">
     <h2>Optimize</h2>
-    <form class="tool-form" id="optimize-form" data-endpoint="/api/optimize" data-label="Optimized">
+    <form class="tool-form" id="optimize-form" data-endpoint="/api/optimize" data-label="Optimized" data-progress="Optimizing…">
       <label>Method
         <select name="method">
           <option value="lossy" selected>Lossy GIF compression</option>
@@ -683,7 +692,7 @@
   <!-- ================= Split ================= -->
   <section class="panel" id="panel-split">
     <h2>Split into frames</h2>
-    <form class="tool-form" data-endpoint="/api/split" data-render="frames">
+    <form class="tool-form" data-endpoint="/api/split" data-render="frames" data-progress="Splitting into frames…">
       <label>Output format
         <select name="fmt">
           <option value="png">PNG</option>
@@ -700,7 +709,7 @@
   <!-- ================= Sprite sheet ================= -->
   <section class="panel" id="panel-sprite">
     <h2>Sprite sheet</h2>
-    <form class="tool-form" data-endpoint="/api/sprite" data-label="Sprite sheet">
+    <form class="tool-form" data-endpoint="/api/sprite" data-label="Sprite sheet" data-progress="Building sprite sheet…">
       <div class="line">
         <label>Columns <input type="number" name="columns" placeholder="auto" min="1"></label>
         <label>Padding <input type="number" name="padding" value="0" min="0"></label>
@@ -715,7 +724,7 @@
   <!-- ================= Convert ================= -->
   <section class="panel" id="panel-convert">
     <h2>Convert</h2>
-    <form class="tool-form" data-endpoint="/api/convert" data-label="Converted">
+    <form class="tool-form" data-endpoint="/api/convert" data-label="Converted" data-progress="Converting…">
       <label>Target format
         <select name="target">
           <option value="gif">GIF</option>

@@ -177,6 +177,7 @@ h4 { margin: 18px 0 6px; }
 }
 .dropzone.small { padding: 16px; }
 .dropzone.over { border-color: var(--accent); background: #26303f; }
+.hint label.link { display: inline; margin: 0; }
 .link { color: var(--accent); cursor: pointer; text-decoration: underline; }
 .tab-hidden { display: none; }
 
@@ -672,6 +673,36 @@ table.facts.frames td { font-variant-numeric: tabular-nums; }
 }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 #toast.error { border-color: var(--danger); color: #ffb3ad; }
+
+/* ---------- login page ---------- */
+
+.login-main { max-width: none; min-height: calc(100vh - 60px); display: grid; place-items: center; padding: 24px 16px 64px; }
+.login-card {
+  width: min(380px, 100%); padding: 22px 24px 18px;
+  background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 8px 24px #0006;
+}
+.login-card h2 { margin: 0 0 2px; font-size: 20px; }
+.login-card > .hint { margin: 0 0 12px; }
+.login-card label { margin: 12px 0; }
+.login-card input[type=text], .login-card input[type=password] {
+  display: block; width: 100%; margin-top: 4px; padding: 9px 10px;
+  background: var(--bg-sunken); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text); font-size: 15px; font-family: inherit;
+}
+.login-card input:focus { outline: none; border-color: var(--accent); }
+.login-pw { display: flex; gap: 6px; align-items: stretch; }
+.login-pw input[type] { flex: 1; min-width: 0; }
+.login-pw button { margin-top: 4px; flex: none; min-width: 58px; }
+.login-err {
+  margin: 4px 0 0; padding: 8px 10px; font-size: 13px; color: #f0b6b1;
+  background: #c0483f26; border: 1px solid var(--danger); border-radius: 6px;
+}
+.login-card button[type=submit] { display: block; width: 100%; margin-top: 16px; }
+.login-foot { text-align: center; margin-top: 12px; }
+.login-card.shake { animation: login-shake .4s; }
+@keyframes login-shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+@media (prefers-reduced-motion: reduce) { .login-card.shake { animation: none; } }
 
 /* ---------- responsive: tablet ---------- */
 

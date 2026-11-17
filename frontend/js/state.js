@@ -3,6 +3,22 @@
 
 const listeners = new Set();
 
+// Just enough to find the working file again after a page refresh - the
+// backend still has everything else. Best-effort: storage can be blocked
+// (private windows, strict site settings), and the app works without it.
+const SESSION_KEY = 'gifme.session';
+
+function remember(job, name) {
+  try {
+    if (job) localStorage.setItem(SESSION_KEY, JSON.stringify({ job, name }));
+    else localStorage.removeItem(SESSION_KEY);
+  } catch { /* storage unavailable */ }
+}
+
+export function rememberedSession() {
+  try { return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch { return null; }
+}
+
 export const state = {
   job: null,
   name: null,
@@ -35,11 +51,13 @@ export function setCurrent({ job, name, url, meta, size_bytes }) {
   state.meta = meta ?? state.meta;
   state.sizeBytes = size_bytes ?? state.sizeBytes;
   state.freshSide = 'input';
+  remember(state.job, state.name);
   listeners.forEach(fn => fn(state));
 }
 
 export function clearCurrent() {
   Object.assign(state, { job: null, name: null, url: null, meta: null, sizeBytes: 0, freshSide: null });
+  remember(null);
   listeners.forEach(fn => fn(state));
 }
 

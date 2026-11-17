@@ -1,10 +1,10 @@
 // Entry point: tabs, dependency banner, and module wiring.
 
-import { get, post } from './api.js';
+import { get, post, signOut } from './api.js';
 import { filesFromClipboard, pasteIntoHovered } from './filedrop.js';
 import { initMaker, loadFrames } from './maker.js';
 import { initResettable } from './reset.js';
-import { clearCurrent, setCurrent, state } from './state.js';
+import { clearCurrent, rememberedSession, setCurrent, state } from './state.js';
 import { initTools } from './tools.js';
 import { initWorkspace, setUploaderVisible, upload } from './workspace.js';
 import { $, $$, bytes, el, initCollapsibleFieldsets, initSliders, toast, withBusy } from './ui.js';
@@ -154,7 +154,7 @@ async function refreshWorkdirStats() {
 function initWorkdir() {
   $('#workdir-open').addEventListener('click', async () => {
     try {
-      const r = await post('/api/workdir/open', {});
+      const r = await post('/api/workdir/open', {}, {}, 'Opening output folder…');
       // Headless setups (containers, remote dev environments) have no GUI to
       // open a file manager in at all - that's not an error, just tell them
       // where the folder is instead (it's also always in this button's title).
@@ -178,7 +178,7 @@ function initWorkdir() {
     if (!confirm('Proceed with clearing the output folder? This cannot be undone.')) return;
 
     try {
-      await post('/api/workdir/clear', keepCurrent ? { keep_job: state.job } : {});
+      await post('/api/workdir/clear', keepCurrent ? { keep_job: state.job } : {}, {}, 'Clearing output folder…');
       if (!keepCurrent) clearCurrent();
       toast(keepCurrent ? 'Output folder cleared - current file kept' : 'Output folder cleared');
       refreshWorkdirStats();
@@ -211,10 +211,31 @@ function initRecovery() {
   }));
 }
 
+// Pick the last working file back up after a refresh. Quiet on failure -
+// the job may simply have expired (GIFME_JOB_TTL_HOURS) or been cleared.
+async function restoreSession() {
+  const saved = rememberedSession();
+  if (!saved?.job || state.job) return;
+  try {
+    const r = await get(`/api/job/${encodeURIComponent(saved.job)}`);
+    if (!state.job) setCurrent(r);
+  } catch {
+    if (!state.job) clearCurrent();
+  }
+}
+
+// The sign-out button only shows when the server has a login turned on.
+async function initSignOut() {
+  const btn = $('#sign-out');
+  btn.addEventListener('click', signOut);
+  try { btn.hidden = !(await get('/api/session')).auth; } catch { /* leave hidden */ }
+}
+
 initTabs();
 initGlobalDrop();
 setUploaderVisible($('#tabs button.active').dataset.tab !== 'make');
 initHealth();
+initSignOut();
 initWorkdir();
 initWorkspace();
 initMaker();
@@ -223,3 +244,4 @@ initRecovery();
 initSliders();
 initCollapsibleFieldsets();
 initResettable();
+restoreSession();

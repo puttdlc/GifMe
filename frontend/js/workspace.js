@@ -50,10 +50,10 @@ export function initWorkspace() {
   $('#ws-reset').addEventListener('click', async (e) => {
     if (!state.job) return;
     await withBusy(e.target, async () => {
-      const r = await post('/api/reset', { job: state.job });
-      setCurrent({ ...r, meta: null });
+      const r = await post('/api/reset', { job: state.job }, {}, 'Resetting…');
+      setCurrent(r);
       toast('Back to the file as uploaded');
-    });
+    }, 'Resetting…');
   });
 
   $('#ws-change').addEventListener('click', () => {
@@ -83,24 +83,24 @@ export function initWorkspace() {
 export async function upload(file) {
   const btn = $('#ws-change');
   return withBusy(btn, async () => {
-    const r = await post('/api/upload', {}, { file });
+    const r = await post('/api/upload', {}, { file }, 'Analyzing file…');
     setCurrent(r);
     // setCurrent already marks the input side fresh - this is just an echo
     // of the same file, not a new derived result, so the output side
     // shouldn't steal the highlight.
     showResult(r, 'Uploaded', { markFresh: false });
     return r;
-  });
+  }, 'Uploading…');
 }
 
 export async function uploadFromUrl(url) {
   const btn = $('#ws-url-load');
   return withBusy(btn, async () => {
-    const r = await post('/api/upload-url', { url });
+    const r = await post('/api/upload-url', { url }, {}, 'Fetching from URL…');
     setCurrent(r);
     showResult(r, 'Loaded from URL', { markFresh: false });
     return r;
-  });
+  }, 'Fetching from URL…');
 }
 
 // The "freshest" file - whichever of the input (workspace bar) or output
@@ -145,10 +145,11 @@ function factLine(meta, size) {
 
 // `transparent` puts a checkerboard behind the file, so a cut-out doesn't
 // read as a black rectangle on this dark UI.
+// No cache-buster: every output gets a fresh filename, and the server
+// marks files immutable, so a re-render reuses the copy already loaded.
 function previewNode(url, name, small = false, transparent = false) {
-  const bust = `${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`;
   if (isVideoName(name)) {
-    const video = el('video', { src: bust, controls: '', autoplay: '', loop: '', muted: '' });
+    const video = el('video', { src: url, controls: '', autoplay: '', loop: '', muted: '' });
     // A video created via document.createElement doesn't reliably honour the
     // "muted" attribute alone (that only sets defaultMuted) - both the
     // input preview (workspace bar) and the output preview (result panel)
@@ -158,7 +159,7 @@ function previewNode(url, name, small = false, transparent = false) {
     return video;
   }
   const classes = [small ? 'thumb' : '', transparent ? 'checkered' : ''].filter(Boolean);
-  return el('img', { src: bust, alt: name, class: classes.join(' ') });
+  return el('img', { src: url, alt: name, class: classes.join(' ') });
 }
 
 // A colored "X% smaller/bigger" (or "about the same size") node comparing
@@ -198,7 +199,9 @@ export function showResult(result, label = 'Done', opts = {}) {
 
   const useBtn = el('button', { class: 'button' }, 'Set as input');
   useBtn.addEventListener('click', async () => {
-    const r = await withBusy(useBtn, () => post('/api/set-input', { job: result.job, name: result.name }));
+    const r = await withBusy(useBtn,
+      () => post('/api/set-input', { job: result.job, name: result.name }, {}, 'Setting as input…'),
+      'Setting as input…');
     if (!r) return;
     setCurrent(r);
     useBtn.disabled = true;

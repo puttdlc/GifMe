@@ -157,14 +157,14 @@ async function streamAutoRequest(fd, ctx) {
     stopBtn.disabled = true;
     stage.textContent = 'Stopping - finishing the current step…';
     try {
-      await post('/api/optimize/auto/stop', { run_id: runId });
+      await post('/api/optimize/auto/stop', { run_id: runId }, {}, 'Stopping…');
     } catch {
       // The run's own response below is what actually finalizes things -
       // a failed stop request just means the loop keeps going to the end.
     }
   };
 
-  progressStart(fd.has('file') ? 'Uploading…' : 'Processing…');
+  progressStart(fd.has('file') ? 'Uploading…' : 'Starting automated optimize…');
 
   try {
     const res = await fetch('/api/optimize/auto', { method: 'POST', body: fd });
@@ -333,7 +333,7 @@ function bindForm(form) {
     if (state.job) fields.job = state.job;
 
     if (form.id === 'optimize-form' && fields.method === 'auto') {
-      await withBusy(button, () => runAutoOptimize(form, fields));
+      await withBusy(button, () => runAutoOptimize(form, fields), 'Optimizing…');
       return;
     }
 
@@ -343,14 +343,15 @@ function bindForm(form) {
     if (extra?.files?.length) files[extra.dataset.extra] = extra.files[0];
     const beforeBytes = file ? file.size : state.sizeBytes;
 
+    const progressLabel = form.dataset.progress || 'Processing…';
     await withBusy(button, async () => {
-      const r = await post(endpoint, fields, files);
+      const r = await post(endpoint, fields, files, progressLabel);
       if (form.dataset.render === 'frames') {
         showFrameGrid('Split into frames', r.frames, r.zip_url);
       } else {
         showResult(r, form.dataset.label || 'Done', { beforeBytes });
       }
-    });
+    }, progressLabel);
   });
 }
 
@@ -373,10 +374,11 @@ async function runRotate(button, fields, endpoint = '/api/rotate') {
   if (!state.job) return toast('Upload a file first', 'error');
   const preserveTransparency = $('#rotate-preserve-transparency').checked;
   const beforeBytes = state.sizeBytes;
+  const progressLabel = endpoint === '/api/flip' ? 'Flipping…' : 'Rotating…';
   await withBusy(button, async () => {
-    const r = await post(endpoint, { ...fields, preserve_transparency: preserveTransparency, job: state.job });
+    const r = await post(endpoint, { ...fields, preserve_transparency: preserveTransparency, job: state.job }, {}, progressLabel);
     showResult(r, 'Done', { beforeBytes });
-  });
+  }, progressLabel);
 }
 
 // Crop and Censor both drag a box on the preview and keep the numeric
@@ -610,9 +612,9 @@ function bindAnalyzer() {
   $('#analyze-run').addEventListener('click', async (e) => {
     if (!state.job) return toast('Upload a file first', 'error');
     await withBusy(e.target, async () => {
-      const info = await post('/api/analyze', { job: state.job });
+      const info = await post('/api/analyze', { job: state.job }, {}, 'Analyzing…');
       renderAnalysis(info);
-    });
+    }, 'Analyzing…');
   });
 }
 

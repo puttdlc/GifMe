@@ -57,7 +57,7 @@ export function pasteIntoHovered(e) {
 // result) is same-origin, against GifMe's own file store, whatever the
 // original URL's own CORS policy is.
 async function fetchAsFile(url) {
-  const r = await post('/api/upload-url', { url });
+  const r = await post('/api/upload-url', { url }, {}, 'Fetching from URL…');
   const res = await fetch(r.url);
   const blob = await res.blob();
   return new File([blob], r.name, { type: blob.type });
@@ -114,7 +114,7 @@ export function attachFileDrop(input, { label = 'a file', example = 'file' } = {
     assign(input, [file]);
     urlInput.value = '';
     toast(`${file.name} loaded`);
-  });
+  }, 'Fetching from URL…');
   urlBtn.addEventListener('click', loadUrl);
   urlInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); loadUrl(); }

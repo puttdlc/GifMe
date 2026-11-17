@@ -40,10 +40,13 @@ export function toast(message, kind = 'info') {
 }
 
 // Wrap an async action with a busy state on its button, and route failures
-// to a toast rather than the console.
-export async function withBusy(button, fn) {
+// to a toast rather than the console. `busyText` replaces the button's own
+// label while it runs - pass something specific ("Removing background…")
+// rather than the generic default so the button itself says what's
+// happening, not just that something is.
+export async function withBusy(button, fn, busyText = 'Working…') {
   const label = button?.textContent;
-  if (button) { button.disabled = true; button.dataset.busy = '1'; button.textContent = 'Working…'; }
+  if (button) { button.disabled = true; button.dataset.busy = '1'; button.textContent = busyText; }
   try {
     return await fn();
   } catch (e) {

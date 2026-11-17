@@ -15,6 +15,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -42,6 +43,16 @@ MAX_UPLOAD_BYTES = int(os.environ.get("GIFME_MAX_UPLOAD_MB", "0") or "0") * 1024
 JOB_TTL_HOURS = float(os.environ.get("GIFME_JOB_TTL_HOURS", "24") or "0")
 _UPLOAD_CHUNK = 1024 * 1024
 
+# Every engine call already spreads itself across all cores, so running
+# several side by side just makes them all thrash - extra requests wait
+# their turn instead. Raise it on a big box serving several people.
+MAX_CONCURRENT_JOBS = max(1, int(os.environ.get("GIFME_MAX_CONCURRENT_JOBS", "2") or "2"))
+job_slots = threading.BoundedSemaphore(MAX_CONCURRENT_JOBS)
+
+# state.json is read-modify-written from request threads; without this,
+# two requests on one job can both claim the same output number.
+_state_lock = threading.Lock()
+
 
 def new_job() -> Path:
     d = WORK_DIR / uuid.uuid4().hex[:12]
@@ -64,14 +75,28 @@ def read_state(d: Path) -> dict:
 
 
 def write_state(d: Path, state: dict) -> None:
-    (d / "state.json").write_text(json.dumps(state))
+    # Write-then-rename, so a concurrent read_state() (which doesn't take
+    # the lock) sees the old file or the new one, never a half-written one.
+    tmp = d / f".state.{uuid.uuid4().hex[:8]}.tmp"
+    tmp.write_text(json.dumps(state))
+    os.replace(tmp, d / "state.json")
 
 
 def set_current(d: Path, name: str) -> None:
-    state = read_state(d)
-    state["current"] = name
-    state.setdefault("history", []).append(name)
-    write_state(d, state)
+    with _state_lock:
+        state = read_state(d)
+        state["current"] = name
+        state.setdefault("history", []).append(name)
+        write_state(d, state)
+
+
+def update_state(d: Path, fn) -> dict:
+    """Read-modify-write state.json under the state lock; fn mutates it in place."""
+    with _state_lock:
+        state = read_state(d)
+        fn(state)
+        write_state(d, state)
+        return state
 
 
 def safe_name(name: str) -> str:
@@ -213,8 +238,22 @@ def resolve(job: str | None, file: UploadFile | None) -> tuple[Path, Path]:
 
 
 def out_path(d: Path, suffix: str, stem: str = "out") -> Path:
-    n = len(list(d.glob(f"{stem}_*"))) + 1
+    """The next unused output name. The counter lives in state.json (seeded
+    from what's on disk, for jobs made before it existed) so two requests
+    running at once never get handed the same file."""
+    with _state_lock:
+        state = read_state(d)
+        seq = state.setdefault("seq", {})
+        n = max(seq.get(stem, 0), len(list(d.glob(f"{stem}_*")))) + 1
+        seq[stem] = n
+        write_state(d, state)
     return d / f"{stem}_{n:03d}{suffix}"
+
+
+def inside(d: Path, name: str) -> Path | None:
+    """`name` resolved within job dir `d`, or None if it escapes it or is missing."""
+    p = (d / name).resolve()
+    return p if p.is_relative_to(d.resolve()) and p.exists() else None
 
 
 def suffix_of(src: Path) -> str:
@@ -249,7 +288,7 @@ def workdir_stats() -> dict:
     """File count and total size of everything a job has ever produced."""
     count, size = 0, 0
     for p in WORK_DIR.rglob("*"):
-        if p.is_file() and p.name != ".gitkeep":
+        if p.is_file() and p.name not in (".gitkeep", ".session-key"):
             count += 1
             size += p.stat().st_size
     return {"count": count, "size_bytes": size, "path": str(WORK_DIR)}
@@ -296,7 +335,7 @@ def clear_workdir(keep: str | None = None) -> None:
     Pass `keep` (a job id) to leave that one job's directory in place, for
     when the user wants to keep their current working file after clearing."""
     for entry in WORK_DIR.iterdir():
-        if entry.name in (".gitkeep", keep):
+        if entry.name in (".gitkeep", ".session-key", keep):  # .session-key: see auth.py
             continue
         if entry.is_dir():
             shutil.rmtree(entry, ignore_errors=True)
@@ -377,7 +416,17 @@ def open_workdir() -> dict:
 
 
 def guard(fn, *args, **kwargs):
-    """Turn engine failures into 400s the UI can display verbatim."""
+    """Run one engine call: waits for a free job slot (see
+    MAX_CONCURRENT_JOBS), and turns failures into 400s the UI can display
+    verbatim."""
+    with job_slots:
+        return guard_quick(fn, *args, **kwargs)
+
+
+def guard_quick(fn, *args, **kwargs):
+    """guard() without waiting for a job slot - for cheap calls (metadata,
+    folder housekeeping, fetching a URL) that shouldn't queue behind a
+    long encode."""
     try:
         return fn(*args, **kwargs)
     except gifme.ToolError as e:

@@ -103,9 +103,11 @@ disables auth entirely. If you skip creating a `.env` file altogether,
 
 | Variable | selfhost preset | local preset | Purpose |
 |---|---|---|---|
-| `GIFME_USERNAME` / `GIFME_PASSWORD` | *(you fill in)* | unset | Set **both** to require HTTP Basic auth on every request. Strongly recommended for anything internet-facing. |
+| `GIFME_USERNAME` / `GIFME_PASSWORD` | *(you fill in)* | unset | Set **both** to require signing in through a login page (sessions last 30 days, failed attempts are rate limited). Strongly recommended for anything internet-facing. |
 | `GIFME_MAX_UPLOAD_MB` | `500` | `0` (unlimited) | Rejects uploads larger than this. |
 | `GIFME_JOB_TTL_HOURS` | `24` | `0` (never) | A job's uploads/outputs are deleted this many hours after they were last touched, so disk usage stays bounded. |
+| `GIFME_MAX_CONCURRENT_JOBS` | unset (`2`) | unset (`2`) | How many heavy engine jobs (encodes, effects, optimize runs) may run at once; the rest wait their turn. Each one already uses every core, so raise it only on a big box serving several people. |
+| `GIFME_TOOL_TIMEOUT_S` | unset (`900`) | unset (`900`) | Kills an external tool (ffmpeg, gifsicle, …) after this many seconds, so a wedged one can't hold a request forever. `0` = no limit. |
 | `GIFME_ALLOWED_ORIGINS` | unset | unset | Comma-separated origins allowed to call `/api/*` cross-origin. Leave unset unless you're serving the frontend from a different domain than the API. |
 | `HOST_WORKDIR` | *(docker only)* | *(docker only)* | What the "Output Folder" button reports, since the container can't open a file manager on your host. |
 
@@ -119,11 +121,11 @@ docker compose up -d
 
 ## Self-Host (expose it on your own domain)
 
-GIFMe has no login and no per-file access checks by default, which is typically fine on a localhost.
+GIFMe has no login (unless you set one) and no per-file access checks by default, which is typically fine on a localhost.
 
 Set up the `.env.selfhost.example` preset above before doing any of the below, since
 this is meant to run one instance per household/team rather than serve
-untrusted random strangers. A basic auth (or an access layer in front, like
+untrusted random strangers. The built-in login (or an access layer in front, like
 Cloudflare Access) is enough.
 
 ### Deploying behind a Cloudflare Tunnel
