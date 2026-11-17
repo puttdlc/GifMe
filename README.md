@@ -2,6 +2,8 @@
 
 A local, self-hosted GIF/animation toolkit inspired by functions of ezgif.com. Runs locally.
 
+![GIFMe screenshot](docs/screenshot.png)
+
 - **ffmpeg** - video or GIF, resize, crop, rotate/flip, speed, reverse, text
   overlay, color effects, WebP/APNG/MP4/WebM export
 - **gifsicle** - GIF specific optimization
